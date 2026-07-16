@@ -1,3 +1,0 @@
-{
-    "stopIteratingIfMatch": "^[a-zA-Z0-9_-]{22,22}$"
-}
