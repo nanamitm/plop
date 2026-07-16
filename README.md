@@ -30,4 +30,4 @@ $ make
 
 # License
 
-This project is licensed under the [GNU General Public License v3.0](https://github.com/Caltrop256/plop/blob/master/LICENSE). You may copy, distribute, and modify the software as long as you track changes/dates in the source files. Any modifications to this project must be made available under the GPL along with build & install instructions.
+This project is licensed under the [GNU General Public License v3.0](https://github.com/nanamitm/plop/blob/master/LICENSE). You may copy, distribute, and modify the software as long as you track changes/dates in the source files. Any modifications to this project must be made available under the GPL along with build & install instructions.
