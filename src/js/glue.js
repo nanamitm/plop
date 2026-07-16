@@ -13,6 +13,7 @@ let lastSelected = 'SAND';
 
 let isUploading = false;
 let state = null;
+const isGitHubPages = location.hostname.endsWith('.github.io');
 
 function setSize(n) {
     canvas.width = 75 * n;
@@ -488,6 +489,8 @@ window.constructUI = (renderList) => {
     toolY += 21 * scaleF * 1;
 
     for(const control of controls) {
+        // GitHub Pages is static and cannot handle the POST used to share states.
+        if(isGitHubPages && control.name == 'share state') continue;
         const controlNode = new TextNode(control.symbol, scaleF * 1.8, new Vec2(left - 2 * scaleF, top + toolY), 'right');
         const name = new TextNode(control.name, scaleF, new Vec2(left + 4 * scaleF, top + toolY + 3 * scaleF * 1.8));
         name.visible = false;
