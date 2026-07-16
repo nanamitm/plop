@@ -1,7 +1,7 @@
 # PLOP
-**[A fully-featured Falling-Sand game powered by WebAssembly!](https://caltrop.dev/plop/)**
+**[A fully-featured Falling-Sand game powered by WebAssembly!](https://nanamitm.github.io/plop/)**
 
-[![haii~ i hope u like tha thing :\]](https://caltrop.dev/plop/logo.png)](https://caltrop.dev/plop/)
+[![haii~ i hope u like tha thing :\]](https://nanamitm.github.io/plop/logo.png)](https://nanamitm.github.io/plop/)
 
 # Background
 ## What?
