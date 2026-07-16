@@ -1,4 +1,5 @@
 compile:
+	@mkdir -p ./build
 	@rm -f ./build/*
 
 	@clang \
