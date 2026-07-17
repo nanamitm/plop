@@ -8,6 +8,8 @@ let renderTemperatureData;
 let fluidDensity;
 let fluidVelocityX;
 let fluidVelocityY;
+let gpuCellFluidNodes;
+let gpuCellFluidWeights;
 let renderer;
 
 // Enable with ?profile=1. The rolling snapshot can then be read from
@@ -46,6 +48,8 @@ function refreshImageData() {
         fluidDensity = new Float32Array(wasm.exports.memory.buffer, wasm.exports.getFluidDensityBuffer(), 75 * 75);
         fluidVelocityX = new Float32Array(wasm.exports.memory.buffer, wasm.exports.getFluidVelocityXBuffer(), 75 * 75);
         fluidVelocityY = new Float32Array(wasm.exports.memory.buffer, wasm.exports.getFluidVelocityYBuffer(), 75 * 75);
+        gpuCellFluidNodes = createView('Uint32', 'gpuCellFluidNodes', canvas.width * canvas.height * 4, true);
+        gpuCellFluidWeights = createView('Float32', 'gpuCellFluidWeights', canvas.width * canvas.height * 4, true);
     }
 }
 
@@ -669,6 +673,8 @@ async function loop() {
     const drawEnd = profilingEnabled ? performance.now() : 0;
     if(!paused) {
         if(renderer.isWebGPU) {
+            await renderer.stepCellTemperatures(renderTemperatureData, fluidDensity, gpuCellFluidNodes, gpuCellFluidWeights);
+            wasm.exports.applyGPUCellTemperatures();
             wasm.exports.tickGPUFluid();
             await renderer.stepFluid(fluidDensity, fluidVelocityX, fluidVelocityY);
         } else wasm.exports.tick();

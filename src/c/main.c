@@ -9,9 +9,12 @@
 export U32 *imageData;
 export U32 *renderBaseData;
 export F32 *renderTemperatureData;
+export U32 *gpuCellFluidNodes;
+export F32 *gpuCellFluidWeights;
 _Bool voidDelete = 1;
 
 U8 g_tick;
+_Bool gpuCellTemperatureReady = 0;
 Cell *cells;
 U16 width = 0;
 U16 height = 0;
@@ -47,6 +50,8 @@ export void setSize(U16 w, U16 h, _Bool voidScene) {
         free(imageData);
         free(renderBaseData);
         free(renderTemperatureData);
+        free(gpuCellFluidNodes);
+        free(gpuCellFluidWeights);
     } else {
         fluid.dt = 0.0005f;
         fluid.diff = 0.1f;
@@ -63,6 +68,8 @@ export void setSize(U16 w, U16 h, _Bool voidScene) {
     imageData = (U32 *)malloc(len * sizeof (U32));
     renderBaseData = (U32 *)malloc(len * sizeof (U32));
     renderTemperatureData = (F32 *)malloc(len * sizeof (F32));
+    gpuCellFluidNodes = (U32 *)malloc(len * 4 * sizeof (U32));
+    gpuCellFluidWeights = (F32 *)malloc(len * 4 * sizeof (F32));
     cells = (Cell *)malloc(len * sizeof (Cell));
 
     U32 i = 0;
@@ -97,6 +104,8 @@ export void setSize(U16 w, U16 h, _Bool voidScene) {
 
             for(U8 j = 0; j < 4; ++j) {
                 cells[i].fluidNodeWeights[j] = 1 - cells[i].fluidNodeWeights[j] / (max + 1);
+                gpuCellFluidNodes[i * 4 + j] = cells[i].fluidNodes[j];
+                gpuCellFluidWeights[i * 4 + j] = cells[i].fluidNodeWeights[j];
             }
             i += 1;
         }
@@ -108,10 +117,12 @@ export void setSize(U16 w, U16 h, _Bool voidScene) {
 void tickCell(Cell *cell) {
     ElementType type = cell->el == NULL ? EMPTY : cell->el->type;
 
-    APPROACH(cell->temperature, fluid.density[cell->fluidNodes[3]], cell->fluidNodeWeights[3]);
-    APPROACH(cell->temperature, fluid.density[cell->fluidNodes[2]], cell->fluidNodeWeights[2]);
-    APPROACH(cell->temperature, fluid.density[cell->fluidNodes[1]], cell->fluidNodeWeights[1]);
-    APPROACH(cell->temperature, fluid.density[cell->fluidNodes[0]], cell->fluidNodeWeights[0]);
+    if(!gpuCellTemperatureReady) {
+        APPROACH(cell->temperature, fluid.density[cell->fluidNodes[3]], cell->fluidNodeWeights[3]);
+        APPROACH(cell->temperature, fluid.density[cell->fluidNodes[2]], cell->fluidNodeWeights[2]);
+        APPROACH(cell->temperature, fluid.density[cell->fluidNodes[1]], cell->fluidNodeWeights[1]);
+        APPROACH(cell->temperature, fluid.density[cell->fluidNodes[0]], cell->fluidNodeWeights[0]);
+    }
 
     if(type > EMPTY)  {
         if(cell->el->tick != g_tick) return;
@@ -338,6 +349,7 @@ export void tickGPUFluid() {
     loopThroughAllCells();
     loopThroughAllCells();
     stepFluidVelocity();
+    gpuCellTemperatureReady = 0;
     g_tick += 1;
 }
 
@@ -373,4 +385,10 @@ export void prepareGPUFrame() {
         renderBaseData[i] = base;
         renderTemperatureData[i] = cells[i].temperature;
     }
+}
+
+export void applyGPUCellTemperatures() {
+    U32 i = width * height;
+    while(i --> 0) cells[i].temperature = renderTemperatureData[i];
+    gpuCellTemperatureReady = 1;
 }
