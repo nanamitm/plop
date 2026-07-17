@@ -29,11 +29,6 @@ typedef struct IOCanvas {
     U32 cellSize;
     U32 cellArrStart;
 
-    F32 fvx[N * N];
-    F32 fvy[N * N];
-    F32 tmp[N * N];
-
-    IOCell cells[];
 } IOCanvas;
 
 #endif

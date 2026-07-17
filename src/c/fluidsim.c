@@ -3,7 +3,27 @@
 #include "elements/elements.h"
 #include "walloc.h"
 
+void configureFluid(U16 size) {
+    if(fluid.s) {
+        free(fluid.s); free(fluid.density); free(fluid.vx);
+        free(fluid.vy); free(fluid.vx0); free(fluid.vy0);
+    }
+    fluid.size = size;
+    U32 count = size * size;
+    fluid.s = malloc(count * sizeof(F32));
+    fluid.density = malloc(count * sizeof(F32));
+    fluid.vx = malloc(count * sizeof(F32));
+    fluid.vy = malloc(count * sizeof(F32));
+    fluid.vx0 = malloc(count * sizeof(F32));
+    fluid.vy0 = malloc(count * sizeof(F32));
+    while(count --> 0) {
+        fluid.s[count] = fluid.density[count] = 5.0f;
+        fluid.vx[count] = fluid.vy[count] = fluid.vx0[count] = fluid.vy0[count] = 0.0f;
+    }
+}
+
 void set_bnd(U8 b, F32 *x) {
+    U16 N = fluid.size;
     for (int i = 1; i < N - 1; i++) {
         x[IX(i, 0  )] = b == 2 ? -x[IX(i, 1  )] : x[IX(i, 1 )];
         x[IX(i, N-1)] = b == 2 ? -x[IX(i, N-2)] : x[IX(i, N-2)];
@@ -20,6 +40,7 @@ void set_bnd(U8 b, F32 *x) {
 }
 
 void lin_solve(U8 b, F32 *x, F32 *x0, F32 a, F32 c) {
+    U16 N = fluid.size;
     F32 cRecip = 1.0 / c;
     for (int k = 0; k < ITER; k++) {
         for (int j = 1; j < N - 1; j++) {
@@ -38,11 +59,13 @@ void lin_solve(U8 b, F32 *x, F32 *x0, F32 a, F32 c) {
 }
 
 void diffuse(U8 b, F32 *x, F32 *x0, F32 diff, F32 dt) {
+    U16 N = fluid.size;
     F32 a = dt * diff * (N - 2) * (N - 2);
     lin_solve(b, x, x0, a, 1 + 4 * a);
 }
 
 void project(F32 *velocX, F32 *velocY, F32 *p, F32 *div) {
+    U16 N = fluid.size;
     for (int j = 1; j < N - 1; j++) {
         for (int i = 1; i < N - 1; i++) {
         div[IX(i, j)] = -0.5f*(
@@ -80,6 +103,7 @@ F64 floor(F64 num) {
 }
 
 void advect(U8 b, F32 *d, F32 *d0, F32 *velocX, F32 *velocY, F32 dt) {
+    U16 N = fluid.size;
     F32 i0, i1, j0, j1;
 
     F32 dtx = dt * (N - 2);
@@ -155,5 +179,6 @@ export void stepFluidVelocity(void) {
 export F32 *getFluidDensityBuffer(void) { return fluid.density; }
 export F32 *getFluidVelocityXBuffer(void) { return fluid.vx; }
 export F32 *getFluidVelocityYBuffer(void) { return fluid.vy; }
+export U16 getFluidSize(void) { return fluid.size; }
 
 FluidSim fluid;

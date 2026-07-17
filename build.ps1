@@ -19,7 +19,7 @@ $cFiles = Get-ChildItem -Path './src/c' -Filter '*.c' -Recurse | ForEach-Object 
 
 Write-Host "Compiling $($cFiles.Count) C files -> build/sim.wasm ..."
 $clangArgs = @(
-    '-O3', '-ffast-math', '-Wall', '-Wextra',
+    '-O3', '-ffast-math', '-DNDEBUG', '-Wall', '-Wextra',
     '--target=wasm32', '--no-standard-libraries',
     '-Wno-unused-parameter', '-Wno-switch',
     '-Wl,--no-entry', '-Wl,--export-dynamic',

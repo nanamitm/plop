@@ -15,6 +15,7 @@ let renderer;
 // Enable with ?profile=1. The rolling snapshot can then be read from
 // window.plopPerformance without adding work to normal gameplay.
 const profilingEnabled = new URLSearchParams(location.search).get('profile') === '1';
+const requestedFluidSize = Number(new URLSearchParams(location.search).get('fluid'));
 const profilingWindow = 120;
 let profilingSamples = 0;
 let profilingFrameIntervals = 0;
@@ -34,8 +35,11 @@ const isGitHubPages = location.hostname.endsWith('.github.io');
 function setSize(n) {
     canvas.width = 75 * n;
     canvas.height = 75 * n;
-    wasm.exports.setSize(canvas.width, canvas.height);
-    renderer.resize();
+    const automaticFluidSize = canvas.width >= 1200 ? 300 : canvas.width >= 600 ? 150 : 75;
+    const fluidSize = [75, 150, 300].includes(requestedFluidSize) && requestedFluidSize <= canvas.width
+        ? requestedFluidSize : automaticFluidSize;
+    wasm.exports.setSizeWithFluid(canvas.width, canvas.height, 0, fluidSize);
+    renderer.resize(wasm.exports.getFluidSize());
     refreshImageData();
 }
 
@@ -45,9 +49,10 @@ function refreshImageData() {
     if(renderer.isWebGPU) {
         renderBaseData = createView('Uint32', 'renderBaseData', canvas.width * canvas.height, true);
         renderTemperatureData = createView('Float32', 'renderTemperatureData', canvas.width * canvas.height, true);
-        fluidDensity = new Float32Array(wasm.exports.memory.buffer, wasm.exports.getFluidDensityBuffer(), 75 * 75);
-        fluidVelocityX = new Float32Array(wasm.exports.memory.buffer, wasm.exports.getFluidVelocityXBuffer(), 75 * 75);
-        fluidVelocityY = new Float32Array(wasm.exports.memory.buffer, wasm.exports.getFluidVelocityYBuffer(), 75 * 75);
+        const fluidCount = wasm.exports.getFluidSize() ** 2;
+        fluidDensity = new Float32Array(wasm.exports.memory.buffer, wasm.exports.getFluidDensityBuffer(), fluidCount);
+        fluidVelocityX = new Float32Array(wasm.exports.memory.buffer, wasm.exports.getFluidVelocityXBuffer(), fluidCount);
+        fluidVelocityY = new Float32Array(wasm.exports.memory.buffer, wasm.exports.getFluidVelocityYBuffer(), fluidCount);
         gpuCellFluidNodes = createView('Uint32', 'gpuCellFluidNodes', canvas.width * canvas.height * 4, true);
         gpuCellFluidWeights = createView('Float32', 'gpuCellFluidWeights', canvas.width * canvas.height * 4, true);
     }
@@ -545,7 +550,7 @@ window.constructUI = (renderList) => {
     renderList.push(infoNode);
 
     const rendererLabel = renderer.isWebGPU ? 'GPU WEBGPU' : 'CPU CANVAS2D';
-    const rendererDescription = renderer.isWebGPU ? 'WEBGPU RENDERING - SIMULATION USES CPU' : 'CANVAS2D RENDERING - SIMULATION USES CPU';
+    const rendererDescription = `${renderer.isWebGPU ? 'WEBGPU' : 'CANVAS2D'} RENDERING - FLUID ${wasm.exports.getFluidSize()}²`;
     const rendererBadge = new TextNode(rendererLabel, scaleF * 0.65, new Vec2((left + right) / 2, bottom + 4 * scaleF), 'center');
     rendererBadge.clr = renderer.isWebGPU ? '#41e1ff' : '#ffd166';
     rendererBadge.id = 'renderer_status';

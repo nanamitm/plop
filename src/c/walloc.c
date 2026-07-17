@@ -298,7 +298,8 @@ allocate_large_object(size_t size) {
     best->next = large_objects;
     best->size = best_size =
       n_allocated * PAGE_SIZE - page_header - LARGE_OBJECT_HEADER_SIZE;
-    ASSERT(best_size >= size_with_header);
+    /* best_size is payload capacity; size_with_header also includes metadata. */
+    ASSERT(best_size >= size);
   }
 
   allocate_chunk(get_page(best), get_chunk_index(best), LARGE_OBJECT);

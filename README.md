@@ -12,6 +12,15 @@ PLOP makes use of two intersecting systems: a cellular-automaton and a fluid sim
 
 # Building
 
+## Fluid resolution
+
+The fluid grid scales automatically with the canvas: 75² below 600 pixels,
+150² from 600 pixels, and 300² from 1200 pixels.  For testing, append
+`?fluid=75`, `?fluid=150`, or `?fluid=300` to override the automatic choice
+when the requested grid fits inside the canvas.  Saved states retain their
+fluid resolution and states created by the previous fixed 75² format remain
+loadable.
+
 Required Dev-Dependencies:
 - clang
 - uglifyjs

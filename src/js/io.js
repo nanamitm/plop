@@ -36,7 +36,7 @@ function importData(compressed) {
     
         canvas.width = size * 75;
         canvas.height = size * 75;
-        renderer.resize();
+        renderer.resize(wasm.exports.getFluidSize());
         refreshImageData();
     } catch(e) {
         console.error(e);

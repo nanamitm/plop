@@ -20,10 +20,10 @@ U16 width = 0;
 U16 height = 0;
 ElementInfo elementLookup[type_length];
 
-U8 FSCALE;
+F32 FSCALE;
 
 export void changeScene(U8 scene) {
-    U32 fi = N * N;
+    U32 fi = fluid.size * fluid.size;
     while(fi-->0) {
         fluid.density[fi] = 5.0f;
         fluid.vx[fi] = 0.0f;
@@ -40,7 +40,7 @@ export void changeScene(U8 scene) {
     scenes[scene ? scene - 1 : randomU8() % SCENES]();
 }
 
-export void setSize(U16 w, U16 h, _Bool voidScene) {
+export void setSizeWithFluid(U16 w, U16 h, _Bool voidScene, U16 fluidSize) {
     if(width) {
         U32 i = width * height;
         while(i --> 0) {
@@ -63,7 +63,9 @@ export void setSize(U16 w, U16 h, _Bool voidScene) {
     height = h;
     U32 len = width * height;
 
-    FSCALE = w / N;
+    configureFluid(fluidSize);
+    U16 N = fluid.size;
+    FSCALE = (F32)w / N;
 
     imageData = (U32 *)malloc(len * sizeof (U32));
     renderBaseData = (U32 *)malloc(len * sizeof (U32));
@@ -112,6 +114,11 @@ export void setSize(U16 w, U16 h, _Bool voidScene) {
     }
 
     changeScene(voidScene ? 1 : 0);
+}
+
+export void setSize(U16 w, U16 h, _Bool voidScene) {
+    U16 fluidSize = w >= 1200 ? 300 : w >= 600 ? 150 : 75;
+    setSizeWithFluid(w, h, voidScene, fluidSize);
 }
 
 void tickCell(Cell *cell) {
