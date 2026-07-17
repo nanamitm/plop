@@ -36,10 +36,8 @@ function importData(compressed) {
     
         canvas.width = size * 75;
         canvas.height = size * 75;
-        imageData = new ImageData(
-            createView('Uint8Clamped', 'imageData', canvas.width * canvas.height * 4, true), 
-            canvas.width, canvas.height
-        );
+        renderer.resize();
+        refreshImageData();
     } catch(e) {
         console.error(e);
         console.error('Invalid File!');

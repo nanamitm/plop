@@ -1,9 +1,18 @@
 const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
 
 let wasm;
 let __memoryLen = 0;
 let imageData;
+let renderer;
+
+// Enable with ?profile=1. The rolling snapshot can then be read from
+// window.plopPerformance without adding work to normal gameplay.
+const profilingEnabled = new URLSearchParams(location.search).get('profile') === '1';
+const profilingWindow = 120;
+let profilingSamples = 0;
+let profilingFrameIntervals = 0;
+let profilingPreviousFrameStart = 0;
+let profilingTotals = {frame: 0, work: 0, draw: 0, tick: 0, blit: 0};
 
 let areaOfEffect = 3;
 let elementInBrush;
@@ -19,8 +28,13 @@ function setSize(n) {
     canvas.width = 75 * n;
     canvas.height = 75 * n;
     wasm.exports.setSize(canvas.width, canvas.height);
+    renderer.resize();
+    refreshImageData();
+}
+
+function refreshImageData() {
     const view = createView('Uint8Clamped', 'imageData', canvas.width * canvas.height * 4, true);
-    imageData = new ImageData(view, canvas.width, canvas.height);
+    imageData = renderer.isWebGPU ? view : new ImageData(view, canvas.width, canvas.height);
 }
 
 const toolList = [
@@ -514,6 +528,25 @@ window.constructUI = (renderList) => {
     infoNode = new TextNode('-1x, -1y, 0.2°C, VOID', scaleF, new Vec2(right - 8, top - 13 * scaleF), 'right');
     renderList.push(infoNode);
 
+    const rendererLabel = renderer.isWebGPU ? 'GPU WEBGPU' : 'CPU CANVAS2D';
+    const rendererDescription = renderer.isWebGPU ? 'WEBGPU RENDERING - SIMULATION USES CPU' : 'CANVAS2D RENDERING - SIMULATION USES CPU';
+    const rendererBadge = new TextNode(rendererLabel, scaleF * 0.65, new Vec2((left + right) / 2, bottom + 4 * scaleF), 'center');
+    rendererBadge.clr = renderer.isWebGPU ? '#41e1ff' : '#ffd166';
+    rendererBadge.id = 'renderer_status';
+
+    const rendererTooltip = new TextNode(rendererDescription, scaleF * 0.6, new Vec2((left + right) / 2, bottom - 14 * scaleF), 'center');
+    rendererTooltip.clr = rendererBadge.clr;
+    rendererTooltip.visible = false;
+    rendererBadge.on('mouseenter', () => {
+        document.body.style.cursor = 'pointer';
+        rendererTooltip.visible = true;
+    });
+    rendererBadge.on('mouseexit', () => {
+        document.body.style.cursor = 'default';
+        rendererTooltip.visible = false;
+    });
+    renderList.push(rendererBadge, rendererTooltip);
+
     const plopNode = new TextNode('plop', scaleF, new Vec2(left + 8, bottom + 4 * scaleF));
     plopNode.on('mouseenter', () => document.body.style.cursor = 'pointer');
     plopNode.on('mouseexit', () => document.body.style.cursor = 'default');
@@ -568,8 +601,10 @@ void async function main() {
             atan2: Math.atan2,
         }
     }))
-    .then(({instance}) => {
+    .then(async ({instance}) => {
         wasm = instance;
+        renderer = await createRenderer(canvas);
+        window.plopRenderer = renderer.isWebGPU ? 'webgpu' : 'canvas2d';
         const seed = new Uint32Array(6);
         crypto.getRandomValues(seed);
         wasm.exports.seed(...seed);
@@ -606,18 +641,51 @@ void async function main() {
 }();
 
 function loop() {
+    const frameStart = profilingEnabled ? performance.now() : 0;
+    const frameInterval = profilingPreviousFrameStart ? frameStart - profilingPreviousFrameStart : 0;
+    profilingPreviousFrameStart = frameStart;
     requestAnimationFrame(loop);
     eventhandler.tick();
 
     if(__memoryLen && wasm.exports.memory.buffer.byteLength != __memoryLen) {
-        const view = createView('Uint8Clamped', 'imageData', canvas.width * canvas.height * 4, true);
-        imageData = new ImageData(view, canvas.width, canvas.height);
+        refreshImageData();
     }
     __memoryLen = wasm.exports.memory.buffer.byteLength;
 
+    const drawStart = profilingEnabled ? performance.now() : 0;
     wasm.exports.draw();
+    const drawEnd = profilingEnabled ? performance.now() : 0;
     if(!paused) wasm.exports.tick();
-    ctx.putImageData(imageData, 0, 0);
+    const tickEnd = profilingEnabled ? performance.now() : 0;
+    renderer.present(imageData);
+
+    if(profilingEnabled) {
+        profilingTotals.draw += drawEnd - drawStart;
+        profilingTotals.tick += tickEnd - drawEnd;
+        profilingTotals.blit += performance.now() - tickEnd;
+        profilingTotals.work += performance.now() - frameStart;
+        if(frameInterval) {
+            profilingTotals.frame += frameInterval;
+            profilingFrameIntervals += 1;
+        }
+        profilingSamples += 1;
+
+        if(profilingSamples === profilingWindow) {
+            const frameMs = profilingTotals.frame / profilingFrameIntervals;
+            window.plopPerformance = {
+                samples: profilingSamples,
+                frameMs,
+                fps: 1000 / frameMs,
+                workMs: profilingTotals.work / profilingSamples,
+                drawMs: profilingTotals.draw / profilingSamples,
+                tickMs: profilingTotals.tick / profilingSamples,
+                blitMs: profilingTotals.blit / profilingSamples
+            };
+            profilingSamples = 0;
+            profilingFrameIntervals = 0;
+            profilingTotals = {frame: 0, work: 0, draw: 0, tick: 0, blit: 0};
+        }
+    }
 
     const explosionPower = wasm.exports.getFrameExplosionPower();
     if(explosionPower > frameExplosionPower) frameExplosionPower = explosionPower;

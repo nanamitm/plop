@@ -21,8 +21,9 @@ compile:
 		./src/js/tools/paint.js \
 		./src/js/tools/erase.js \
 		./src/js/tools/line.js \
-		./src/js/tools/wind.js \
-		./src/js/glue.js \
+	./src/js/tools/wind.js \
+	./src/js/webgpu.js \
+	./src/js/glue.js \
 		./src/js/elements.js \
 		./src/js/lib/pako.js \
 		./src/js/io.js \
