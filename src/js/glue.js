@@ -3,6 +3,8 @@ const canvas = document.getElementById('canvas');
 let wasm;
 let __memoryLen = 0;
 let imageData;
+let renderBaseData;
+let renderTemperatureData;
 let renderer;
 
 // Enable with ?profile=1. The rolling snapshot can then be read from
@@ -35,6 +37,10 @@ function setSize(n) {
 function refreshImageData() {
     const view = createView('Uint8Clamped', 'imageData', canvas.width * canvas.height * 4, true);
     imageData = renderer.isWebGPU ? view : new ImageData(view, canvas.width, canvas.height);
+    if(renderer.isWebGPU) {
+        renderBaseData = createView('Uint32', 'renderBaseData', canvas.width * canvas.height, true);
+        renderTemperatureData = createView('Float32', 'renderTemperatureData', canvas.width * canvas.height, true);
+    }
 }
 
 const toolList = [
@@ -653,11 +659,12 @@ function loop() {
     __memoryLen = wasm.exports.memory.buffer.byteLength;
 
     const drawStart = profilingEnabled ? performance.now() : 0;
-    wasm.exports.draw();
+    if(renderer.isWebGPU) wasm.exports.prepareGPUFrame();
+    else wasm.exports.draw();
     const drawEnd = profilingEnabled ? performance.now() : 0;
     if(!paused) wasm.exports.tick();
     const tickEnd = profilingEnabled ? performance.now() : 0;
-    renderer.present(imageData);
+    renderer.present(imageData, renderBaseData, renderTemperatureData);
 
     if(profilingEnabled) {
         profilingTotals.draw += drawEnd - drawStart;

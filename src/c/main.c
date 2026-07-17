@@ -7,6 +7,8 @@
 #include "scene.h"
 
 export U32 *imageData;
+export U32 *renderBaseData;
+export F32 *renderTemperatureData;
 _Bool voidDelete = 1;
 
 U8 g_tick;
@@ -43,6 +45,8 @@ export void setSize(U16 w, U16 h, _Bool voidScene) {
         }
         free(cells);
         free(imageData);
+        free(renderBaseData);
+        free(renderTemperatureData);
     } else {
         fluid.dt = 0.0005f;
         fluid.diff = 0.1f;
@@ -57,6 +61,8 @@ export void setSize(U16 w, U16 h, _Bool voidScene) {
     FSCALE = w / N;
 
     imageData = (U32 *)malloc(len * sizeof (U32));
+    renderBaseData = (U32 *)malloc(len * sizeof (U32));
+    renderTemperatureData = (F32 *)malloc(len * sizeof (F32));
     cells = (Cell *)malloc(len * sizeof (Cell));
 
     U32 i = 0;
@@ -324,4 +330,38 @@ void *memcpy(void *dest, const void *src, unsigned long s) {
     char *cdest = (char *)dest;
     while(s --> 0) cdest[s] = csrc[s];
     return dest;
+}
+
+/*
+ * Build a compact, GPU-friendly view of the pointer-heavy cell state.  The
+ * compute shader performs the temperature colour compositing and writes the
+ * final RGBA texture, while Canvas2D keeps using draw() above.
+ */
+export void prepareGPUFrame() {
+    U32 i = width * height;
+    while(i --> 0) {
+        U32 base = 0;
+        Element *el = cells[i].el;
+        if(el) {
+            Color clr;
+            switch(el->type) {
+                case DEBRIS :
+                    clr = elementLookup[el->r0].colors[el->color];
+                    break;
+                case PUMP :
+                    if(el->r0) {
+                        clr = elementLookup[el->r0].colors[el->rv];
+                        break;
+                    }
+                default :
+                    clr = elementLookup[el->type].colors[el->color];
+                    break;
+            }
+            if(el->electricityState == 1) base = 0x00ffff;
+            else if(!el->scorched) base = clr.value & 0x00ffffff;
+            else base = (clr.r & 63) | ((clr.g & 63) << 8) | ((clr.b & 63) << 16);
+        }
+        renderBaseData[i] = base;
+        renderTemperatureData[i] = cells[i].temperature;
+    }
 }

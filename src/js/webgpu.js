@@ -76,6 +76,37 @@ class WebGPURenderer {
             },
             primitive: {topology: 'triangle-list'}
         });
+        this.computePipeline = device.createComputePipeline({
+            layout: 'auto',
+            compute: {
+                module: device.createShaderModule({code: `
+                    struct Dimensions { width: u32, height: u32 };
+                    @group(0) @binding(0) var<storage, read> baseColours: array<u32>;
+                    @group(0) @binding(1) var<storage, read> temperatures: array<f32>;
+                    @group(0) @binding(2) var output: texture_storage_2d<rgba8unorm, write>;
+                    @group(0) @binding(3) var<uniform> dimensions: Dimensions;
+
+                    @compute @workgroup_size(8, 8)
+                    fn computeMain(@builtin(global_invocation_id) id: vec3u) {
+                        if(id.x >= dimensions.width || id.y >= dimensions.height) { return; }
+                        let index = id.y * dimensions.width + id.x;
+                        let packed = baseColours[index];
+                        var rgb = vec3u(packed & 255u, (packed >> 8u) & 255u, (packed >> 16u) & 255u);
+                        let temperature = temperatures[index];
+                        if(temperature >= 0.0) {
+                            var heat = temperature * 0.5;
+                            if(heat >= 50.0 && heat < 130.0) { heat = 50.0; }
+                            else if(heat >= 130.0) { heat = heat - 80.0; }
+                            rgb.x = rgb.x | u32(min(255.0, heat));
+                        } else {
+                            rgb.z = rgb.z | u32(min(255.0, temperature * -4.0));
+                        }
+                        textureStore(output, id.xy, vec4f(vec3f(rgb) / 255.0, 1.0));
+                    }
+                `}),
+                entryPoint: 'computeMain'
+            }
+        });
         this.resize();
     }
 
@@ -85,7 +116,7 @@ class WebGPURenderer {
         this.texture = this.device.createTexture({
             size: [this.canvas.width, this.canvas.height],
             format: 'rgba8unorm',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING
         });
         this.bindGroup = this.device.createBindGroup({
             layout: this.pipeline.getBindGroupLayout(0),
@@ -97,9 +128,38 @@ class WebGPURenderer {
         this.bytesPerRow = this.canvas.width * 4;
         this.alignedBytesPerRow = Math.ceil(this.bytesPerRow / 256) * 256;
         this.uploadBuffer = this.alignedBytesPerRow === this.bytesPerRow ? null : new Uint8Array(this.alignedBytesPerRow * this.canvas.height);
+        const pixelCount = this.canvas.width * this.canvas.height;
+        if(this.baseBuffer) this.baseBuffer.destroy();
+        if(this.temperatureBuffer) this.temperatureBuffer.destroy();
+        this.baseBuffer = this.device.createBuffer({size: pixelCount * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST});
+        this.temperatureBuffer = this.device.createBuffer({size: pixelCount * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST});
+        if(!this.dimensionsBuffer) this.dimensionsBuffer = this.device.createBuffer({size: 8, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST});
+        this.device.queue.writeBuffer(this.dimensionsBuffer, 0, new Uint32Array([this.canvas.width, this.canvas.height]));
+        this.computeBindGroup = this.device.createBindGroup({
+            layout: this.computePipeline.getBindGroupLayout(0),
+            entries: [
+                {binding: 0, resource: {buffer: this.baseBuffer}},
+                {binding: 1, resource: {buffer: this.temperatureBuffer}},
+                {binding: 2, resource: this.texture.createView()},
+                {binding: 3, resource: {buffer: this.dimensionsBuffer}}
+            ]
+        });
     }
 
-    present(imageData) {
+    present(imageData, baseData, temperatureData) {
+        if(baseData && temperatureData) {
+            this.device.queue.writeBuffer(this.baseBuffer, 0, baseData);
+            this.device.queue.writeBuffer(this.temperatureBuffer, 0, temperatureData);
+            const encoder = this.device.createCommandEncoder();
+            const compute = encoder.beginComputePass();
+            compute.setPipeline(this.computePipeline);
+            compute.setBindGroup(0, this.computeBindGroup);
+            compute.dispatchWorkgroups(Math.ceil(this.canvas.width / 8), Math.ceil(this.canvas.height / 8));
+            compute.end();
+            this.drawTexture(encoder);
+            this.device.queue.submit([encoder.finish()]);
+            return;
+        }
         const pixels = imageData.data || imageData;
         let upload = pixels;
 
@@ -119,6 +179,11 @@ class WebGPURenderer {
         );
 
         const encoder = this.device.createCommandEncoder();
+        this.drawTexture(encoder);
+        this.device.queue.submit([encoder.finish()]);
+    }
+
+    drawTexture(encoder) {
         const pass = encoder.beginRenderPass({
             colorAttachments: [{
                 view: this.context.getCurrentTexture().createView(),
@@ -131,7 +196,6 @@ class WebGPURenderer {
         pass.setBindGroup(0, this.bindGroup);
         pass.draw(3);
         pass.end();
-        this.device.queue.submit([encoder.finish()]);
     }
 
     get isWebGPU() {
