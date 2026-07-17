@@ -11,6 +11,7 @@ let fluidVelocityY;
 let gpuCellFluidNodes;
 let gpuCellFluidWeights;
 let renderer;
+let pendingCanvasSize = null;
 
 // Enable with ?profile=1. The rolling snapshot can then be read from
 // window.plopPerformance without adding work to normal gameplay.
@@ -41,6 +42,19 @@ function setSize(n) {
     wasm.exports.setSizeWithFluid(canvas.width, canvas.height, 0, fluidSize);
     renderer.resize(wasm.exports.getFluidSize());
     refreshImageData();
+}
+
+// WebGPU frames await buffer readbacks.  Do not recreate the Wasm views or
+// destroy their corresponding GPU buffers until the current frame has ended.
+function requestCanvasResize(n) {
+    pendingCanvasSize = n;
+}
+
+function applyPendingCanvasResize() {
+    if(pendingCanvasSize == null) return;
+    const size = pendingCanvasSize;
+    pendingCanvasSize = null;
+    setSize(size);
 }
 
 function refreshImageData() {
@@ -132,7 +146,7 @@ const controls = [
                         document.body.style.cursor = 'default'
                     });
                     resButton.on('mousedown', () => {
-                        setSize(val);
+                        requestCanvasResize(val);
                         renderList[Element.getElementIndexById('resizeMenuCancel')].onmousedown();
                     });
                     resButtonX += resButton.width + 4 * scaleF;
@@ -666,6 +680,8 @@ async function loop() {
     const frameInterval = profilingPreviousFrameStart ? frameStart - profilingPreviousFrameStart : 0;
     profilingPreviousFrameStart = frameStart;
     eventhandler.tick();
+
+    applyPendingCanvasResize();
 
     if(__memoryLen && wasm.exports.memory.buffer.byteLength != __memoryLen) {
         refreshImageData();
