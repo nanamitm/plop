@@ -350,6 +350,14 @@ void *memcpy(void *dest, const void *src, unsigned long s) {
     return dest;
 }
 
+/* Required when LLVM lowers zero-initialisation loops without libc. */
+__attribute__((optnone))
+void *memset(void *dest, int value, unsigned long s) {
+    unsigned char *bytes = (unsigned char *)dest;
+    while(s --> 0) bytes[s] = (unsigned char)value;
+    return dest;
+}
+
 export void tickGPUFluid() {
     explosionPower = 0;
     tickSubatomics();

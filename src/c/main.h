@@ -31,6 +31,7 @@ typedef double      F64;
 void setSize(U16 w, U16 h, _Bool voidScene);
 void setSizeWithFluid(U16 w, U16 h, _Bool voidScene, U16 fluidSize);
 void *memcpy(void *dest, const void *src, unsigned long s);
+void *memset(void *dest, int value, unsigned long s);
 
 // imported functions
 __attribute__((import_module("env"), import_name("log"))) void env_log();
