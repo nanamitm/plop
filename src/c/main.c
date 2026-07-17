@@ -332,6 +332,15 @@ void *memcpy(void *dest, const void *src, unsigned long s) {
     return dest;
 }
 
+export void tickGPUFluid() {
+    explosionPower = 0;
+    tickSubatomics();
+    loopThroughAllCells();
+    loopThroughAllCells();
+    stepFluidVelocity();
+    g_tick += 1;
+}
+
 /*
  * Build a compact, GPU-friendly view of the pointer-heavy cell state.  The
  * compute shader performs the temperature colour compositing and writes the

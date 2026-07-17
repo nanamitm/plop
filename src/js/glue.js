@@ -5,6 +5,9 @@ let __memoryLen = 0;
 let imageData;
 let renderBaseData;
 let renderTemperatureData;
+let fluidDensity;
+let fluidVelocityX;
+let fluidVelocityY;
 let renderer;
 
 // Enable with ?profile=1. The rolling snapshot can then be read from
@@ -40,6 +43,9 @@ function refreshImageData() {
     if(renderer.isWebGPU) {
         renderBaseData = createView('Uint32', 'renderBaseData', canvas.width * canvas.height, true);
         renderTemperatureData = createView('Float32', 'renderTemperatureData', canvas.width * canvas.height, true);
+        fluidDensity = new Float32Array(wasm.exports.memory.buffer, wasm.exports.getFluidDensityBuffer(), 75 * 75);
+        fluidVelocityX = new Float32Array(wasm.exports.memory.buffer, wasm.exports.getFluidVelocityXBuffer(), 75 * 75);
+        fluidVelocityY = new Float32Array(wasm.exports.memory.buffer, wasm.exports.getFluidVelocityYBuffer(), 75 * 75);
     }
 }
 
@@ -646,11 +652,10 @@ void async function main() {
     })
 }();
 
-function loop() {
+async function loop() {
     const frameStart = profilingEnabled ? performance.now() : 0;
     const frameInterval = profilingPreviousFrameStart ? frameStart - profilingPreviousFrameStart : 0;
     profilingPreviousFrameStart = frameStart;
-    requestAnimationFrame(loop);
     eventhandler.tick();
 
     if(__memoryLen && wasm.exports.memory.buffer.byteLength != __memoryLen) {
@@ -662,7 +667,12 @@ function loop() {
     if(renderer.isWebGPU) wasm.exports.prepareGPUFrame();
     else wasm.exports.draw();
     const drawEnd = profilingEnabled ? performance.now() : 0;
-    if(!paused) wasm.exports.tick();
+    if(!paused) {
+        if(renderer.isWebGPU) {
+            wasm.exports.tickGPUFluid();
+            await renderer.stepFluid(fluidDensity, fluidVelocityX, fluidVelocityY);
+        } else wasm.exports.tick();
+    }
     const tickEnd = profilingEnabled ? performance.now() : 0;
     renderer.present(imageData, renderBaseData, renderTemperatureData);
 
@@ -696,6 +706,7 @@ function loop() {
 
     const explosionPower = wasm.exports.getFrameExplosionPower();
     if(explosionPower > frameExplosionPower) frameExplosionPower = explosionPower;
+    requestAnimationFrame(loop);
 }
 
 function generateFavicon(glyph) {

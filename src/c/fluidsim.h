@@ -20,6 +20,7 @@ typedef struct FluidSim {
 
 FluidSim *initFluid(F32 diffusion, F32 viscosity, F32 dt);
 void stepFluid(void);
+void stepFluidVelocity(void);
 
 extern U8 FSCALE;
 extern FluidSim fluid;

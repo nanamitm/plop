@@ -107,6 +107,43 @@ class WebGPURenderer {
                 entryPoint: 'computeMain'
             }
         });
+        const fluidModule = device.createShaderModule({code: `
+            struct FluidParams { a: f32, c: f32, dt: f32, mode: u32 };
+            @group(0) @binding(0) var<storage, read> source: array<f32>;
+            @group(0) @binding(1) var<storage, read> current: array<f32>;
+            @group(0) @binding(2) var<storage, read> velocityX: array<f32>;
+            @group(0) @binding(3) var<storage, read> velocityY: array<f32>;
+            @group(0) @binding(4) var<storage, read_write> output: array<f32>;
+            @group(0) @binding(5) var<uniform> params: FluidParams;
+
+            fn index(x: i32, y: i32) -> u32 {
+                return u32(clamp(x, 0, 74) + clamp(y, 0, 74) * 75);
+            }
+
+            @compute @workgroup_size(8, 8)
+            fn fluidMain(@builtin(global_invocation_id) id: vec3u) {
+                if(id.x >= 75u || id.y >= 75u) { return; }
+                let x = i32(id.x); let y = i32(id.y); let at = index(x, y);
+                if(x == 0 || y == 0 || x == 74 || y == 74) {
+                    output[at] = current[index(clamp(x, 1, 73), clamp(y, 1, 73))];
+                    return;
+                }
+                if(params.mode == 0u) {
+                    output[at] = (source[at] + params.a * (
+                        current[index(x + 1, y)] + current[index(x - 1, y)] +
+                        current[index(x, y + 1)] + current[index(x, y - 1)])) / params.c;
+                } else {
+                    let px = clamp(f32(x) - params.dt * 73.0 * velocityX[at], 0.5, 74.5);
+                    let py = clamp(f32(y) - params.dt * 73.0 * velocityY[at], 0.5, 74.5);
+                    let x0 = i32(floor(px)); let y0 = i32(floor(py));
+                    let sx = px - f32(x0); let sy = py - f32(y0);
+                    output[at] = mix(
+                        mix(current[index(x0, y0)], current[index(x0 + 1, y0)], sx),
+                        mix(current[index(x0, y0 + 1)], current[index(x0 + 1, y0 + 1)], sx), sy);
+                }
+            }
+        `});
+        this.fluidPipeline = device.createComputePipeline({layout: 'auto', compute: {module: fluidModule, entryPoint: 'fluidMain'}});
         this.resize();
     }
 
@@ -144,6 +181,65 @@ class WebGPURenderer {
                 {binding: 3, resource: {buffer: this.dimensionsBuffer}}
             ]
         });
+        this.setupFluidBuffers();
+    }
+
+    setupFluidBuffers() {
+        const size = 75 * 75 * 4;
+        if(this.fluidA) return;
+        const storage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC;
+        this.fluidSource = this.device.createBuffer({size, usage: storage});
+        this.fluidA = this.device.createBuffer({size, usage: storage});
+        this.fluidB = this.device.createBuffer({size, usage: storage});
+        this.fluidVX = this.device.createBuffer({size, usage: storage});
+        this.fluidVY = this.device.createBuffer({size, usage: storage});
+        this.fluidReadback = this.device.createBuffer({size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ});
+        this.fluidDiffuseParams = this.device.createBuffer({size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST});
+        this.fluidAdvectParams = this.device.createBuffer({size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST});
+        const a = 0.0005 * 0.1 * 73 * 73;
+        this.device.queue.writeBuffer(this.fluidDiffuseParams, 0, new Float32Array([a, 1 + 4 * a, 0.0005, 0]));
+        const advect = new ArrayBuffer(16);
+        new Float32Array(advect).set([0, 1, 0.0005]);
+        new Uint32Array(advect)[3] = 1;
+        this.device.queue.writeBuffer(this.fluidAdvectParams, 0, advect);
+    }
+
+    fluidBindGroup(current, output, params) {
+        return this.device.createBindGroup({layout: this.fluidPipeline.getBindGroupLayout(0), entries: [
+            {binding: 0, resource: {buffer: this.fluidSource}},
+            {binding: 1, resource: {buffer: current}},
+            {binding: 2, resource: {buffer: this.fluidVX}},
+            {binding: 3, resource: {buffer: this.fluidVY}},
+            {binding: 4, resource: {buffer: output}},
+            {binding: 5, resource: {buffer: params}}
+        ]});
+    }
+
+    async stepFluid(density, vx, vy) {
+        this.device.queue.writeBuffer(this.fluidSource, 0, density);
+        this.device.queue.writeBuffer(this.fluidA, 0, density);
+        this.device.queue.writeBuffer(this.fluidVX, 0, vx);
+        this.device.queue.writeBuffer(this.fluidVY, 0, vy);
+        const encoder = this.device.createCommandEncoder();
+        let current = this.fluidA, output = this.fluidB;
+        for(let iteration = 0; iteration < 16; ++iteration) {
+            const pass = encoder.beginComputePass();
+            pass.setPipeline(this.fluidPipeline);
+            pass.setBindGroup(0, this.fluidBindGroup(current, output, this.fluidDiffuseParams));
+            pass.dispatchWorkgroups(10, 10);
+            pass.end();
+            [current, output] = [output, current];
+        }
+        const advect = encoder.beginComputePass();
+        advect.setPipeline(this.fluidPipeline);
+        advect.setBindGroup(0, this.fluidBindGroup(current, output, this.fluidAdvectParams));
+        advect.dispatchWorkgroups(10, 10);
+        advect.end();
+        encoder.copyBufferToBuffer(output, 0, this.fluidReadback, 0, density.byteLength);
+        this.device.queue.submit([encoder.finish()]);
+        await this.fluidReadback.mapAsync(GPUMapMode.READ);
+        density.set(new Float32Array(this.fluidReadback.getMappedRange()).slice());
+        this.fluidReadback.unmap();
     }
 
     present(imageData, baseData, temperatureData) {

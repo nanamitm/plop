@@ -142,4 +142,18 @@ void stepFluid(void) {
     advect(0, fluid.density, fluid.s, fluid.vx, fluid.vy, fluid.dt);
 }
 
+/* WebGPU performs density diffusion/advection; velocity remains on the CPU. */
+export void stepFluidVelocity(void) {
+    diffuse(1, fluid.vx0, fluid.vx, fluid.visc, fluid.dt);
+    diffuse(2, fluid.vy0, fluid.vy, fluid.visc, fluid.dt);
+    project(fluid.vx0, fluid.vy0, fluid.vx, fluid.vy);
+    advect(1, fluid.vx, fluid.vx0, fluid.vx0, fluid.vy0, fluid.dt);
+    advect(2, fluid.vy, fluid.vy0, fluid.vx0, fluid.vy0, fluid.dt);
+    project(fluid.vx, fluid.vy, fluid.vx0, fluid.vy0);
+}
+
+export F32 *getFluidDensityBuffer(void) { return fluid.density; }
+export F32 *getFluidVelocityXBuffer(void) { return fluid.vx; }
+export F32 *getFluidVelocityYBuffer(void) { return fluid.vy; }
+
 FluidSim fluid;
