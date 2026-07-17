@@ -10,9 +10,7 @@ PLOP follows a tradition of games called "Falling-Sand games". A host of indepen
 ## Mechanics
 PLOP makes use of two intersecting systems: a cellular-automaton and a fluid simulation. Elements are portrayed as pixels, or "cells", on a grid. Each cell interacts with its direct neighbors based on their types and produces unique behavior. Fire will set flammable material like wood ablaze. Hot cells will evaporate water, creating steam that rises to the top of the canvas, only to later rain down again. Supplementary to the cellular-automaton, a fluid simulation approximates wind and allows temperature changes to propagate.
 
-# Building
-
-## Fluid resolution
+# Fluid resolution
 
 The fluid grid scales automatically with the canvas: 75² below 600 pixels,
 150² from 600 pixels, and 300² from 1200 pixels.
@@ -27,6 +25,8 @@ parameters to the URL:
 The manual setting overrides the automatic choice when the requested fluid
 grid fits inside the canvas. Saved states retain their fluid resolution, and
 states created by the previous fixed 75² format remain loadable.
+
+# Building
 
 Required Dev-Dependencies:
 - clang
