@@ -39,14 +39,11 @@ export void changeScene(U8 scene) {
 }
 
 export void setSizeWithFluid(U16 w, U16 h, _Bool voidScene, U16 fluidSize) {
-    env_log(1); // Resize entered.
     if(width) {
         U32 i = width * height;
-        env_log(2); // Releasing old elements.
         while(i --> 0) {
             if(cells[i].el) free(cells[i].el);
         }
-        env_log(3); // Releasing old cell buffers.
         free(cells);
         free(imageData);
         free(renderBaseData);
@@ -62,18 +59,15 @@ export void setSizeWithFluid(U16 w, U16 h, _Bool voidScene, U16 fluidSize) {
     height = h;
     U32 len = width * height;
 
-    env_log(4); // Reconfiguring fluid buffers.
     configureFluid(fluidSize);
     U16 N = fluid.size;
     FSCALE = (F32)w / N;
 
-    env_log(5); // Allocating new cell buffers.
     imageData = (U32 *)malloc(len * sizeof (U32));
     renderBaseData = (U32 *)malloc(len * sizeof (U32));
     renderTemperatureData = (F32 *)malloc(len * sizeof (F32));
     cells = (Cell *)malloc(len * sizeof (Cell));
 
-    env_log(6); // Initializing new cells.
     U32 i = 0;
     for(U16 y = 0; y < height; ++y) {
         for(U16 x = 0; x < width; ++x) {
@@ -111,9 +105,7 @@ export void setSizeWithFluid(U16 w, U16 h, _Bool voidScene, U16 fluidSize) {
         }
     }
 
-    env_log(7); // Generating the initial scene.
     changeScene(voidScene ? 1 : 0);
-    env_log(8); // Resize completed in Wasm.
 }
 
 export void setSize(U16 w, U16 h, _Bool voidScene) {

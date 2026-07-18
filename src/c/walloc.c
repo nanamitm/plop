@@ -240,7 +240,7 @@ maybe_merge_free_large_object(struct large_object** prev) {
     }
   }
 }
-static void
+__attribute__((unused)) static void
 maybe_compact_free_large_objects(void) {
   if (pending_large_object_compact) {
     pending_large_object_compact = 0;
@@ -264,7 +264,12 @@ maybe_compact_free_large_objects(void) {
 // object.
 static struct large_object*
 allocate_large_object(size_t size) {
-  maybe_compact_free_large_objects();
+  /*
+   * Adjacent-free-block compaction can walk a corrupt/stale list after a
+   * populated canvas is resized.  Best-fit allocation below is sufficient:
+   * it reuses individual free blocks and grows Wasm memory only when no one
+   * block is large enough.
+   */
   struct large_object *best = NULL, **best_prev = &large_objects;
   size_t best_size = -1;
   for (struct large_object **prev = &large_objects, *walk = large_objects;
