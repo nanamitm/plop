@@ -9,8 +9,6 @@
 export U32 *imageData;
 export U32 *renderBaseData;
 export F32 *renderTemperatureData;
-export U32 *gpuCellFluidNodes;
-export F32 *gpuCellFluidWeights;
 _Bool voidDelete = 1;
 
 U8 g_tick;
@@ -50,8 +48,6 @@ export void setSizeWithFluid(U16 w, U16 h, _Bool voidScene, U16 fluidSize) {
         free(imageData);
         free(renderBaseData);
         free(renderTemperatureData);
-        free(gpuCellFluidNodes);
-        free(gpuCellFluidWeights);
     } else {
         fluid.dt = 0.0005f;
         fluid.diff = 0.1f;
@@ -70,8 +66,6 @@ export void setSizeWithFluid(U16 w, U16 h, _Bool voidScene, U16 fluidSize) {
     imageData = (U32 *)malloc(len * sizeof (U32));
     renderBaseData = (U32 *)malloc(len * sizeof (U32));
     renderTemperatureData = (F32 *)malloc(len * sizeof (F32));
-    gpuCellFluidNodes = (U32 *)malloc(len * 4 * sizeof (U32));
-    gpuCellFluidWeights = (F32 *)malloc(len * 4 * sizeof (F32));
     cells = (Cell *)malloc(len * sizeof (Cell));
 
     U32 i = 0;
@@ -106,8 +100,6 @@ export void setSizeWithFluid(U16 w, U16 h, _Bool voidScene, U16 fluidSize) {
 
             for(U8 j = 0; j < 4; ++j) {
                 cells[i].fluidNodeWeights[j] = 1 - cells[i].fluidNodeWeights[j] / (max + 1);
-                gpuCellFluidNodes[i * 4 + j] = cells[i].fluidNodes[j];
-                gpuCellFluidWeights[i * 4 + j] = cells[i].fluidNodeWeights[j];
             }
             i += 1;
         }
@@ -368,7 +360,10 @@ void *memset(void *dest, int value, unsigned long s) {
 export void tickGPUFluid() {
     explosionPower = 0;
     tickSubatomics();
+    /* Apply the fluid temperature once, then retain it for the second cell pass. */
+    gpuCellTemperatureReady = 0;
     loopThroughAllCells();
+    gpuCellTemperatureReady = 1;
     loopThroughAllCells();
     stepFluidVelocity();
     gpuCellTemperatureReady = 0;
@@ -407,10 +402,4 @@ export void prepareGPUFrame() {
         renderBaseData[i] = base;
         renderTemperatureData[i] = cells[i].temperature;
     }
-}
-
-export void applyGPUCellTemperatures() {
-    U32 i = width * height;
-    while(i --> 0) cells[i].temperature = renderTemperatureData[i];
-    gpuCellTemperatureReady = 1;
 }

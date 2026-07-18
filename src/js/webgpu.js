@@ -147,32 +147,6 @@ class WebGPURenderer {
             }
         `});
         this.fluidPipeline = device.createComputePipeline({layout: 'auto', compute: {module: fluidModule, entryPoint: 'fluidMain'}});
-        this.cellTemperaturePipeline = device.createComputePipeline({
-            layout: 'auto',
-            compute: {
-                module: device.createShaderModule({code: `
-                    @group(0) @binding(0) var<storage, read> inputTemperature: array<f32>;
-                    @group(0) @binding(1) var<storage, read> fluidDensity: array<f32>;
-                    @group(0) @binding(2) var<storage, read> fluidNodes: array<u32>;
-                    @group(0) @binding(3) var<storage, read> fluidWeights: array<f32>;
-                    @group(0) @binding(4) var<storage, read_write> outputTemperature: array<f32>;
-                    @group(0) @binding(5) var<uniform> cellCount: u32;
-
-                    @compute @workgroup_size(256)
-                    fn cellTemperatureMain(@builtin(global_invocation_id) id: vec3u) {
-                        if(id.x >= cellCount) { return; }
-                        var value = inputTemperature[id.x];
-                        for(var j = 4u; j > 0u; j--) {
-                            let mapIndex = id.x * 4u + (j - 1u);
-                            let fluidValue = fluidDensity[fluidNodes[mapIndex]];
-                            value = (value - fluidValue) * fluidWeights[mapIndex] + fluidValue;
-                        }
-                        outputTemperature[id.x] = value;
-                    }
-                `}),
-                entryPoint: 'cellTemperatureMain'
-            }
-        });
         this.resize();
     }
 
@@ -211,52 +185,6 @@ class WebGPURenderer {
             ]
         });
         this.setupFluidBuffers(fluidSize);
-        this.setupCellBuffers(pixelCount);
-    }
-
-    setupCellBuffers(cellCount) {
-        for(const buffer of [this.cellTemperatureInput, this.cellTemperatureOutput, this.cellNodes, this.cellWeights, this.cellReadback]) {
-            if(buffer) buffer.destroy();
-        }
-        const storage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC;
-        this.cellTemperatureInput = this.device.createBuffer({size: cellCount * 4, usage: storage});
-        this.cellTemperatureOutput = this.device.createBuffer({size: cellCount * 4, usage: storage});
-        this.cellNodes = this.device.createBuffer({size: cellCount * 16, usage: storage});
-        this.cellWeights = this.device.createBuffer({size: cellCount * 16, usage: storage});
-        this.cellReadback = this.device.createBuffer({size: cellCount * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ});
-        if(!this.cellCountBuffer) this.cellCountBuffer = this.device.createBuffer({size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST});
-        this.device.queue.writeBuffer(this.cellCountBuffer, 0, new Uint32Array([cellCount]));
-        this.cellMapKey = null;
-        this.cellTemperatureBindGroup = this.device.createBindGroup({layout: this.cellTemperaturePipeline.getBindGroupLayout(0), entries: [
-            {binding: 0, resource: {buffer: this.cellTemperatureInput}},
-            {binding: 1, resource: {buffer: this.fluidSource}},
-            {binding: 2, resource: {buffer: this.cellNodes}},
-            {binding: 3, resource: {buffer: this.cellWeights}},
-            {binding: 4, resource: {buffer: this.cellTemperatureOutput}},
-            {binding: 5, resource: {buffer: this.cellCountBuffer}}
-        ]});
-    }
-
-    async stepCellTemperatures(temperatures, density, nodes, weights) {
-        const mapKey = `${nodes.byteOffset}:${nodes.length}`;
-        if(this.cellMapKey !== mapKey) {
-            this.device.queue.writeBuffer(this.cellNodes, 0, nodes);
-            this.device.queue.writeBuffer(this.cellWeights, 0, weights);
-            this.cellMapKey = mapKey;
-        }
-        this.device.queue.writeBuffer(this.cellTemperatureInput, 0, temperatures);
-        this.device.queue.writeBuffer(this.fluidSource, 0, density);
-        const encoder = this.device.createCommandEncoder();
-        const pass = encoder.beginComputePass();
-        pass.setPipeline(this.cellTemperaturePipeline);
-        pass.setBindGroup(0, this.cellTemperatureBindGroup);
-        pass.dispatchWorkgroups(Math.ceil(temperatures.length / 256));
-        pass.end();
-        encoder.copyBufferToBuffer(this.cellTemperatureOutput, 0, this.cellReadback, 0, temperatures.byteLength);
-        this.device.queue.submit([encoder.finish()]);
-        await this.cellReadback.mapAsync(GPUMapMode.READ);
-        temperatures.set(new Float32Array(this.cellReadback.getMappedRange()).slice());
-        this.cellReadback.unmap();
     }
 
     setupFluidBuffers(fluidSize) {
