@@ -662,7 +662,7 @@ void async function main() {
     .then(r => r.arrayBuffer())
     .then(bytes => WebAssembly.instantiate(bytes, {
         env: {
-            log: console.log,
+            log: stage => recordDebug('wasm-resize-stage', stage),
             cos: Math.cos,
             sin: Math.sin,
             atan2: Math.atan2,

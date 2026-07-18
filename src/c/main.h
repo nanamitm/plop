@@ -34,7 +34,7 @@ void *memcpy(void *dest, const void *src, unsigned long s);
 void *memset(void *dest, int value, unsigned long s);
 
 // imported functions
-__attribute__((import_module("env"), import_name("log"))) void env_log();
+__attribute__((import_module("env"), import_name("log"))) void env_log(U32 stage);
 __attribute__((import_module("env"), import_name("cos"))) double env_cos(double);
 __attribute__((import_module("env"), import_name("sin"))) double env_sin(double);
 __attribute__((import_module("env"), import_name("atan2"))) double env_atan2(double, double);
