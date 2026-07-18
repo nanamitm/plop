@@ -42,16 +42,17 @@ function setSize(n) {
     refreshImageData();
 }
 
-// WebGPU frames await buffer readbacks.  Do not recreate the Wasm views or
-// destroy their corresponding GPU buffers until the current frame has ended.
+// A resize replaces resources used by the preceding present() submission.
+// Wait for that submission before destroying its texture and buffers.
 function requestCanvasResize(n) {
     pendingCanvasSize = n;
 }
 
-function applyPendingCanvasResize() {
+async function applyPendingCanvasResize() {
     if(pendingCanvasSize == null) return;
     const size = pendingCanvasSize;
     pendingCanvasSize = null;
+    if(renderer.isWebGPU) await renderer.waitForIdle();
     setSize(size);
 }
 
@@ -677,7 +678,7 @@ async function loop() {
     profilingPreviousFrameStart = frameStart;
     eventhandler.tick();
 
-    applyPendingCanvasResize();
+    await applyPendingCanvasResize();
 
     if(__memoryLen && wasm.exports.memory.buffer.byteLength != __memoryLen) {
         refreshImageData();

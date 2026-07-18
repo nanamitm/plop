@@ -187,6 +187,10 @@ class WebGPURenderer {
         this.setupFluidBuffers(fluidSize);
     }
 
+    async waitForIdle() {
+        await this.device.queue.onSubmittedWorkDone();
+    }
+
     setupFluidBuffers(fluidSize) {
         if(this.fluidSize === fluidSize) return;
         for(const buffer of [this.fluidSource, this.fluidA, this.fluidB, this.fluidVX, this.fluidVY, this.fluidReadback, this.fluidDiffuseParams, this.fluidAdvectParams]) {
