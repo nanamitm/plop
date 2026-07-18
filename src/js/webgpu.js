@@ -22,6 +22,7 @@ class WebGPURenderer {
         if(!adapter) throw new Error('No WebGPU adapter found');
 
         const device = await adapter.requestDevice();
+        device.lost.then(info => recordDebug('webgpu-device-lost', `${info.reason}: ${info.message}`));
         const context = canvas.getContext('webgpu');
         if(!context) throw new Error('Could not create a WebGPU canvas context');
 

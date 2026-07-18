@@ -14,6 +14,7 @@ let pendingCanvasSize = null;
 // Enable with ?profile=1. The rolling snapshot can then be read from
 // window.plopPerformance without adding work to normal gameplay.
 const profilingEnabled = new URLSearchParams(location.search).get('profile') === '1';
+const diagnosticsEnabled = new URLSearchParams(location.search).get('debug') === '1';
 const requestedFluidSize = Number(new URLSearchParams(location.search).get('fluid'));
 const profilingWindow = 120;
 let profilingSamples = 0;
@@ -31,21 +32,54 @@ let isUploading = false;
 let state = null;
 const isGitHubPages = location.hostname.endsWith('.github.io');
 
+let diagnosticsPanel;
+function recordDebug(stage, detail = '') {
+    if(!diagnosticsEnabled) return;
+    const entry = {
+        stage,
+        detail: String(detail),
+        renderer: window.plopRenderer || 'initializing',
+        canvas: `${canvas.width}x${canvas.height}`,
+        memoryMiB: wasm ? Math.round(wasm.exports.memory.buffer.byteLength / 1024 / 1024) : 0,
+        time: Math.round(performance.now())
+    };
+    window.plopDebug = entry;
+    console.info('[PLOP debug]', entry);
+    if(!diagnosticsPanel) {
+        diagnosticsPanel = document.createElement('pre');
+        Object.assign(diagnosticsPanel.style, {
+            position: 'fixed', top: '8px', left: '8px', margin: '0', padding: '8px',
+            color: '#00ff88', background: '#000c', zIndex: '10', font: '12px monospace'
+        });
+        document.body.append(diagnosticsPanel);
+    }
+    diagnosticsPanel.textContent = JSON.stringify(entry, null, 2);
+}
+
+window.addEventListener('error', event => recordDebug('uncaught-error', event.message));
+window.addEventListener('unhandledrejection', event => recordDebug('unhandled-rejection', event.reason));
+
 function setSize(n) {
+    recordDebug('resize-start', n);
     canvas.width = 75 * n;
     canvas.height = 75 * n;
     const automaticFluidSize = canvas.width >= 1200 ? 300 : canvas.width >= 600 ? 150 : 75;
     const fluidSize = [75, 150, 300].includes(requestedFluidSize) && requestedFluidSize <= canvas.width
         ? requestedFluidSize : automaticFluidSize;
+    recordDebug('resize-before-wasm', `${canvas.width}x${canvas.height}, fluid ${fluidSize}`);
     wasm.exports.setSizeWithFluid(canvas.width, canvas.height, 0, fluidSize);
+    recordDebug('resize-after-wasm');
     renderer.resize(wasm.exports.getFluidSize());
+    recordDebug('resize-after-renderer');
     refreshImageData();
+    recordDebug('resize-complete');
 }
 
 // A resize replaces resources used by the preceding present() submission.
 // The renderer retires those resources asynchronously so the frame loop does
 // not block while the GPU is presenting.
 function requestCanvasResize(n) {
+    recordDebug('resize-requested', n);
     pendingCanvasSize = n;
 }
 
@@ -53,6 +87,7 @@ function applyPendingCanvasResize() {
     if(pendingCanvasSize == null) return;
     const size = pendingCanvasSize;
     pendingCanvasSize = null;
+    recordDebug('resize-applying', size);
     setSize(size);
 }
 
