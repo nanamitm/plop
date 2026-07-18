@@ -164,8 +164,8 @@ class WebGPURenderer {
                         var value = inputTemperature[id.x];
                         for(var j = 4u; j > 0u; j--) {
                             let mapIndex = id.x * 4u + (j - 1u);
-                            let target = fluidDensity[fluidNodes[mapIndex]];
-                            value = (value - target) * fluidWeights[mapIndex] + target;
+                            let fluidValue = fluidDensity[fluidNodes[mapIndex]];
+                            value = (value - fluidValue) * fluidWeights[mapIndex] + fluidValue;
                         }
                         outputTemperature[id.x] = value;
                     }
