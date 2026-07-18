@@ -151,7 +151,7 @@ class WebGPURenderer {
     }
 
     resize(fluidSize = 75) {
-        if(this.texture) this.texture.destroy();
+        this.retireAfterPresent(this.texture, this.baseBuffer, this.temperatureBuffer);
         this.context.configure({device: this.device, format: this.format, alphaMode: 'opaque'});
         this.texture = this.device.createTexture({
             size: [this.canvas.width, this.canvas.height],
@@ -169,8 +169,6 @@ class WebGPURenderer {
         this.alignedBytesPerRow = Math.ceil(this.bytesPerRow / 256) * 256;
         this.uploadBuffer = this.alignedBytesPerRow === this.bytesPerRow ? null : new Uint8Array(this.alignedBytesPerRow * this.canvas.height);
         const pixelCount = this.canvas.width * this.canvas.height;
-        if(this.baseBuffer) this.baseBuffer.destroy();
-        if(this.temperatureBuffer) this.temperatureBuffer.destroy();
         this.baseBuffer = this.device.createBuffer({size: pixelCount * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST});
         this.temperatureBuffer = this.device.createBuffer({size: pixelCount * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST});
         if(!this.dimensionsBuffer) this.dimensionsBuffer = this.device.createBuffer({size: 8, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST});
@@ -187,8 +185,13 @@ class WebGPURenderer {
         this.setupFluidBuffers(fluidSize);
     }
 
-    async waitForIdle() {
-        await this.device.queue.onSubmittedWorkDone();
+    retireAfterPresent(...resources) {
+        const retired = resources.filter(Boolean);
+        if(!retired.length) return;
+        this.device.queue.onSubmittedWorkDone().then(
+            () => retired.forEach(resource => resource.destroy()),
+            () => {}
+        );
     }
 
     setupFluidBuffers(fluidSize) {

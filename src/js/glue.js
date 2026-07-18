@@ -43,16 +43,16 @@ function setSize(n) {
 }
 
 // A resize replaces resources used by the preceding present() submission.
-// Wait for that submission before destroying its texture and buffers.
+// The renderer retires those resources asynchronously so the frame loop does
+// not block while the GPU is presenting.
 function requestCanvasResize(n) {
     pendingCanvasSize = n;
 }
 
-async function applyPendingCanvasResize() {
+function applyPendingCanvasResize() {
     if(pendingCanvasSize == null) return;
     const size = pendingCanvasSize;
     pendingCanvasSize = null;
-    if(renderer.isWebGPU) await renderer.waitForIdle();
     setSize(size);
 }
 
@@ -678,7 +678,7 @@ async function loop() {
     profilingPreviousFrameStart = frameStart;
     eventhandler.tick();
 
-    await applyPendingCanvasResize();
+    applyPendingCanvasResize();
 
     if(__memoryLen && wasm.exports.memory.buffer.byteLength != __memoryLen) {
         refreshImageData();
