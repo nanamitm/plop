@@ -310,18 +310,25 @@ export void draw() {
             imageData[i] |= (U8)MIN(255, temperature);
         } else imageData[i] |= ((U8)MIN(255, temperature * -4)) << 16;
     }
-    i = 0;
-    for(U16 y = 0; y < height; ++y) {
-        for(U16 x = 0; x < width; ++x) {
-            F32 fvx = fluid.vx[cells[i].fluidInd] * 0.5;
-            F32 fvy = fluid.vy[cells[i].fluidInd] * 0.5;
+    /*
+     * The wind vectors live on the much smaller fluid grid.  Sampling that
+     * grid directly avoids a second O(width * height) traversal just to draw
+     * an overlay, while retaining the previous roughly 10-pixel spacing.
+     */
+    U16 fluidStep = MAX(1, (U16)(10.0f / FSCALE));
+    for(U16 fy = 0; fy < fluid.size; fy += fluidStep) {
+        for(U16 fx = 0; fx < fluid.size; fx += fluidStep) {
+            U32 fluidInd = fy * fluid.size + fx;
+            F32 fvx = fluid.vx[fluidInd] * 0.5f;
+            F32 fvy = fluid.vy[fluidInd] * 0.5f;
 
-            if((ABS(fvx) >= 1 || ABS(fvy) >= 1) && x % 10 == 0 && y % 10 == 0) {
+            if(ABS(fvx) >= 1 || ABS(fvy) >= 1) {
+                U16 x = MIN(width - 1, (U16)((fx + 0.5f) * FSCALE));
+                U16 y = MIN(height - 1, (U16)((fy + 0.5f) * FSCALE));
                 U8 val = MIN(255, (fvx * fvx + fvy * fvy));
                 Color clr = {.a = 0xff, .r = val, .g = val, .b = val};
                 line(x, y, x + fvx, y + fvy, clr.value);
             }
-            i += 1;
         }
     }
 
