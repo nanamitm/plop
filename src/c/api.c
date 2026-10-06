@@ -66,7 +66,9 @@ export void eraseArea(U16 mx, U16 my, U8 areaOfEffect) {
     }
 }
 
-const char *magic = "PLOP :]";
+/* Saves without the scorched bit left it uninitialised, so they keep the old tag. */
+const char *magic = "PLOP :}";
+const char *legacyMagic = "PLOP :]";
 
 /* Bit inspection also works in builds compiled with -ffast-math. */
 static _Bool finiteValue(const F32 *value) {
@@ -134,9 +136,12 @@ export IOCanvas* exportData(void) {
 export _Bool importData(IOCanvas *canvas, U32 byteLength) {
     if(!canvas || byteLength < sizeof(IOCanvas)) return 0;
     if(canvas->size == 0 || canvas->size > 20) return 0;
+    _Bool current = 1, legacy = 1;
     for(U8 i = 0; i < 8; ++i) {
-        if(magic[i] != canvas->magic[i]) return 0;
+        current &= magic[i] == canvas->magic[i];
+        legacy &= legacyMagic[i] == canvas->magic[i];
     }
+    if(!current && !legacy) return 0;
     if(canvas->cellSize != sizeof(IOCell)) return 0;
     if(canvas->cellArrStart < sizeof(IOCanvas) || canvas->cellArrStart > byteLength) return 0;
     if((canvas->cellArrStart - sizeof(IOCanvas)) % (sizeof(F32) * 3)) return 0;
@@ -185,7 +190,7 @@ export _Bool importData(IOCanvas *canvas, U32 byteLength) {
         cells[ti].el->rv =               ioCells[i].el.rv;
         cells[ti].el->r0 =               ioCells[i].el.r0;
         cells[ti].el->color =            ioCells[i].el.color;
-        cells[ti].el->scorched =         ioCells[i].el.scorched;
+        cells[ti].el->scorched =         current && ioCells[i].el.scorched;
         cells[ti].el->halted =           ioCells[i].el.halted;
         cells[ti].el->electricityState = ioCells[i].el.electricityState;
         cells[ti].el->sbpx =             ioCells[i].el.sbpx;

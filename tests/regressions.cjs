@@ -55,6 +55,12 @@ async function ioTests() {
     const bytes = saved(e), offset = new DataView(bytes.buffer).getUint32(20, true);
     assert.equal(load(e, bytes), 1);
     assert.equal(e.testScorched(37, 37), 1, 'restore scorched state');
+    const legacy = bytes.slice();
+    legacy.set(Buffer.from('PLOP :]\0'));
+    assert.equal(legacy[offset + 10] & 8, 8, 'fixture sets the scorched bit');
+    assert.equal(load(e, legacy), 1, 'load legacy saves');
+    assert.equal(e.testScorched(37, 37), 0, 'ignore uninitialised legacy scorched bit');
+    assert.equal(load(e, bytes), 1);
     const mutations = [
         b => b.subarray(0, 8),
         b => b.subarray(0, b.length - 1),
