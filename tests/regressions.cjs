@@ -80,4 +80,35 @@ async function ioTests() {
     }
     console.log('PASS saved-state validation, legacy/new fluid sizes, scorched round-trip');
 }
-(async () => { await ioTests(); })().catch(error => { console.error(error); process.exitCode = 1; });
+async function simulationTests() {
+    for(const moving of [0, 1]) {
+        const e = await fresh();
+        assert.equal(e.testLifetime(moving), 1, 'callbacks cannot mutate a reused element');
+    }
+    let e = await fresh(), t = types(e);
+    e.applyPaint(37, 37, t.PUMP, 0);
+    e.testElementState(37, 37, t.SAND, 2, 3, false);
+    e.tick();
+    const neighbors = [];
+    for(let y = 36; y <= 38; y++) for(let x = 36; x <= 38; x++) {
+        if(x !== 37 || y !== 37) neighbors.push(e.getType(e.getCell(x, y)));
+    }
+    assert.equal(neighbors.filter(type => type === t.SAND).length, 1);
+    assert.equal(neighbors.filter(type => type === t.EMPTY).length, 7);
+    // All particles leave the right edge together. Deleting the head must not skip its successor.
+    e = await fresh();
+    for(let i = 0; i < 10; i++) e.testParticle(74, 37, 255, 0);
+    e.testParticleTick();
+    assert.equal(e.getNSubatomics(), 0);
+    e.testParticle(37, 37, 255, 0);
+    e.changeScene(1);
+    const initialMemory = e.memory.buffer.byteLength;
+    for(let i = 0; i < 1000; i++) {
+        e.testParticle(37, 37, 255, 0);
+        e.changeScene(1);
+    }
+    assert.equal(e.getNSubatomics(), 0);
+    assert.equal(e.memory.buffer.byteLength, initialMemory, 'reset reuses all particle allocations');
+    console.log('PASS callback lifetimes, pump discharge, particle removal and reset reuse');
+}
+(async () => { await ioTests(); await simulationTests(); })().catch(error => { console.error(error); process.exitCode = 1; });

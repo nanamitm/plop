@@ -30,7 +30,7 @@ void VARPREF(update)(Element *el, Cell *cell, U16 x, U16 y) {
         }
     } else {
         for(U8 i = 0; i < 8; ++i) {
-            if(!neighbors[i]->el && randEveryU8(20)) spawnElement(neighbors[i], (ElementType)el->r0);
+            if(neighbors[i] && !neighbors[i]->el && randEveryU8(20)) spawnElement(neighbors[i], (ElementType)el->r0);
         }
     }
 }

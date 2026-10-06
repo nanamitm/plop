@@ -26,7 +26,7 @@ _Bool VARPREF(attempt)(Element *el, Cell *cell, Cell *target) {
 
 void VARPREF(update)(Element *el, Cell *cell, U16 x, U16 y) {
     if(!attempt_acid(el, cell, getCell(x, y + 1))) {
-        if(cell->el->type == ACID) moveHorizontally(cell, (randomU8() % elementLookup[ACID].liquid.dispersion + 1) * LORDIR, attempt_acid);
+        if(cell->el && cell->el->type == ACID) moveHorizontally(cell, (randomU8() % elementLookup[ACID].liquid.dispersion + 1) * LORDIR, attempt_acid);
     };
 }
 

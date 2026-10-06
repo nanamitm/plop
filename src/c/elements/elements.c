@@ -12,12 +12,15 @@ export const char *enumToString[] = {
 
 export void freeCell(Cell *c) {
     if(c && c->el) {
-        free((void *)c->el);
+        Element *el = c->el;
         c->el = NULL;
+        el->cell = NULL;
+        if(el != updatingElement) free(el);
     }
 }
 
 export void spawnElement(Cell *cell, ElementType type) {
+    if(cell->el) freeCell(cell);
     Element *el = malloc(sizeof (Element));
     el->type = type;
     el->scorched = 0;
@@ -110,7 +113,8 @@ void moveHorizontally(Cell *source, I16 distance, _Bool (*callback)(Element *, C
         ind += dir;
         x += dir;
         target = &cells[ind];
-        if(!callback(source->el, source, target)) break;
+        if(!callback(source->el, source, target) || !target->el ||
+           (updatingElement && !updatingElement->cell)) break;
         source = target;
     }
 }
@@ -133,7 +137,8 @@ void moveVertically(Cell *source, I16 distance, _Bool (*callback)(Element *, Cel
         ind += dir * width;
         y += dir;
         target = &cells[ind];
-        if(!callback(source->el, source, target)) break;
+        if(!callback(source->el, source, target) || !target->el ||
+           (updatingElement && !updatingElement->cell)) break;
         source = target;
     }
 }
@@ -158,7 +163,8 @@ void lineMove(U16 x0, U16 y0, I16 x1, I16 y1, _Bool (*callback)(Element *, Cell 
         if(e2 <= dx) { err += dx; y0 += sy; }
 
         Cell *next = &cells[y0 * width + x0];
-        if(!callback(source->el, source, next)) break;
+        if(!callback(source->el, source, next) || !next->el ||
+           (updatingElement && !updatingElement->cell)) break;
         source = next;
         if(x0 == x1 && y0 == y1) break;
     }

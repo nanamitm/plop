@@ -57,6 +57,7 @@ void VARPREF(update)(Element *el, Cell *cell, U16 x, U16 y) {
                     break;
                 }
             }
+            if(!el->r0) return;
             for(U8 i = 0; i < 8; ++i) {
                 Cell *target = n[i];
                 if(getType(target) == EMPTY) {
@@ -64,6 +65,7 @@ void VARPREF(update)(Element *el, Cell *cell, U16 x, U16 y) {
                     target->el->color = el->rv;
                     el->r0 = 0;
                     el->rv = 0;
+                    return;
                 }
             }
         }

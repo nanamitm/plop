@@ -4,6 +4,7 @@
 #include "../color.h"
 
 void tickSubatomics(void);
+void clearSubatomics(void);
 void createSubatomic(U16 x, U16 y, U8);
 void createSubatomicHelper(U16 x, U16 y, U8 wavelength, U8 angle);
 

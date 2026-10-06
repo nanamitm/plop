@@ -15,7 +15,7 @@ _Bool VARPREF(attempt)(Element *el, Cell *cell, Cell *target) {
     Cell *rand = getCell(cell->x + RANDDIR, cell->y + RANDDIR);
     _Bool isEmpty = getType(rand) == EMPTY;
 
-    ElementInfo* info = &elementLookup[target->el->type];
+    ElementInfo* info = &elementLookup[getType(target)];
 
     switch(getType(target)) {
         case WATER : if(isEmpty) spawnElement(rand, STEAM);

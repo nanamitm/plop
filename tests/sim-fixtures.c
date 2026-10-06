@@ -15,3 +15,36 @@ export void testElementState(U16 x, U16 y, U8 r0, U8 rv, U8 electricity, _Bool s
 export _Bool testScorched(U16 x, U16 y) { return getCell(x, y)->el->scorched; }
 export F32 testSubpixelY(U16 x, U16 y) { return getCell(x, y)->el->sbpy; }
 export U32 testSubatomicBytes(void) { return sizeof(Subatomic); }
+
+static void replaceDuringUpdate(Element *el, Cell *cell, U16 x, U16 y) {
+    freeCell(cell);
+    spawnElement(getCell(x + 1, y), STONE);
+}
+
+static _Bool replaceDuringMove(Element *el, Cell *cell, Cell *target) {
+    freeCell(cell);
+    spawnElement(cell, STONE);
+    return 1;
+}
+
+export _Bool testLifetime(_Bool duringMove) {
+    extern void tick(void);
+    Cell *cell = getCell(37, 37);
+    spawnElement(cell, SAND);
+    cell->el->tick = g_tick;
+    ElementInfo original = elementLookup[SAND];
+    if(duringMove) {
+        elementLookup[SAND].attempt = replaceDuringMove;
+        cell->el->sbpx = 2;
+    } else elementLookup[SAND].handler = replaceDuringUpdate;
+    tick();
+    elementLookup[SAND] = original;
+    Cell *replacement = duringMove ? cell : getCell(38, 37);
+    return getType(replacement) == STONE && replacement->el->sbpy == 0 &&
+           replacement->el->sbpx == 0 && !updatingElement;
+}
+
+export void testParticle(U16 x, U16 y, U8 wavelength, U8 angle) {
+    createSubatomicHelper(x, y, wavelength, angle);
+}
+export void testParticleTick(void) { tickSubatomics(); }

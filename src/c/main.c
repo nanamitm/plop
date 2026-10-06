@@ -17,6 +17,7 @@ Cell *cells;
 U16 width = 0;
 U16 height = 0;
 ElementInfo elementLookup[type_length];
+Element *updatingElement = NULL;
 
 F32 FSCALE;
 
@@ -27,14 +28,7 @@ export void changeScene(U8 scene) {
         fluid.vx[fi] = 0.0f;
         fluid.vy[fi] = 0.0f;
     }
-    if(rootSA) {
-        for(Subatomic *node = rootSA, *prev = NULL; node->next; prev = node, node = node->next) {
-            if(prev) free(prev);
-            if(!node->next) free(node);
-        }
-        rootSA = NULL;
-        nSubatomics = 0;
-    }
+    clearSubatomics();
     scenes[scene ? scene - 1 : randomU8() % SCENES]();
 }
 
@@ -113,7 +107,7 @@ export void setSize(U16 w, U16 h, _Bool voidScene) {
     setSizeWithFluid(w, h, voidScene, fluidSize);
 }
 
-void tickCell(Cell *cell) {
+static void tickCellBody(Cell *cell) {
     ElementType type = cell->el == NULL ? EMPTY : cell->el->type;
 
     if(!gpuCellTemperatureReady) {
@@ -136,7 +130,7 @@ void tickCell(Cell *cell) {
                 Cell *neighbors[8];
                 getMooreNeighborhood(cell, neighbors);
                 for(U8 i = 0; i < 8; ++i) {
-                    if(neighbors[i]->el->electricityState == 2) {
+                    if(neighbors[i] && neighbors[i]->el && neighbors[i]->el->electricityState == 2) {
                         if(neighbors[i]->el->type == CONVEYER) {
                             if(type == CONVEYER) el->electricityState = 1;
                         } else el->electricityState = 1;
@@ -177,10 +171,12 @@ void tickCell(Cell *cell) {
             } else {
                 lineMove(cell->x, cell->y, cell->x + mx, cell->y + my, info->attempt);
             }
+            if(!el->cell) return;
             cell = el->cell;
         }
 
         if(info->handler) info->handler(cell->el, cell, cell->x, cell->y);
+        if(!el->cell) return;
 
         if(mx || my) {
             el->sbpx -= mx;
@@ -224,6 +220,14 @@ void tickCell(Cell *cell) {
             APPROACH(fluid.density[cell->fluidInd], 5.0f, 0.999);
         }
     }
+}
+
+void tickCell(Cell *cell) {
+    updatingElement = cell->el;
+    tickCellBody(cell);
+    /* freeCell marks a removed element, but callbacks may still read it. */
+    if(updatingElement && !updatingElement->cell) free(updatingElement);
+    updatingElement = NULL;
 }
 
 void loopThroughAllCells() {

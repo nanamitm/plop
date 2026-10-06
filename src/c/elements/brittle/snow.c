@@ -37,11 +37,12 @@ void VARPREF(update)(Element *el, Cell *cell, U16 x, U16 y) {
     }
 
     if(!attempt_snow(el, cell, getCell(x, y + 1))) {
+        if(!el->cell) return;
         if(!el->halted) {
             int8_t dir = LORDIR;
             if(attempt_snow(el, cell, getCell(x + dir, y + 1)));
-            else if(attempt_snow(el, cell, getCell(x - dir, y + 1)));
-            else attemptHalt(el);
+            else if(el->cell && attempt_snow(el, cell, getCell(x - dir, y + 1)));
+            else if(el->cell) attemptHalt(el);
         } else tryReleaseHalted(cell);
     } else el->halted = 0;
 }

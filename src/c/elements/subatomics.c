@@ -13,10 +13,21 @@ U32 nSubatomics = 0;
 Subatomic *rootSA = NULL;
 Subatomic *last = NULL;
 
+void clearSubatomics(void) {
+    while(rootSA) {
+        Subatomic *next = rootSA->next;
+        free(rootSA);
+        rootSA = next;
+    }
+    last = NULL;
+    nSubatomics = 0;
+}
+
 void createSubatomicHelper(U16 x, U16 y, U8 wavelength, U8 angle) {
-    if(nSubatomics > MAX_SUBATOMICS) return;
-    nSubatomics += 1;
+    if(nSubatomics >= MAX_SUBATOMICS) return;
     Subatomic *el = malloc(sizeof (Subatomic));
+    if(!el) return;
+    nSubatomics += 1;
     el->x = x;
     el->y = y;
     el->waveLength = wavelength;
@@ -41,7 +52,7 @@ void createSubatomic(U16 x, U16 y, U8 type) {
 }
 
 void tickSubatomics(void) {
-    for(Subatomic *node = rootSA, *prev = NULL; node; prev = node, node = node->next) {
+    for(Subatomic *node = rootSA, *prev = NULL; node;) {
         node->x += node->vx;
         node->y += node->vy;
 
@@ -50,6 +61,7 @@ void tickSubatomics(void) {
         }
 
         Cell *cell = getCell((U16)node->x, (U16)node->y);
+        if(!cell) goto DELETE_PARTICLE;
         F32 angle;
 
         if(node->waveLength < 7) {
@@ -81,7 +93,7 @@ void tickSubatomics(void) {
                     goto DELETE_PARTICLE;
             }
         } else if(node->waveLength == 0xff) {
-            ElementInfo *info = &elementLookup[cell->el->type];
+            ElementInfo *info = &elementLookup[getType(cell)];
             switch(getType(cell)) {
                 default :
                     if(!randEveryU8(info->weight / 2 + 1)) {
@@ -138,6 +150,8 @@ void tickSubatomics(void) {
             }
             #undef COLLISIONLENGTH
         }
+        prev = node;
+        node = node->next;
         continue;
         DELETE_PARTICLE :
         if(!prev) {
@@ -147,9 +161,9 @@ void tickSubatomics(void) {
             prev->next = node->next;
             if(!node->next) last = prev;
         }
+        Subatomic *next = node->next;
         free(node);
-        if(prev) node = prev;
-        else node = rootSA;
+        node = next;
         nSubatomics -= 1;
         continue;
     }

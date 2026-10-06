@@ -176,6 +176,8 @@ extern Cell *cells;
 extern U16 width;
 extern U16 height;
 extern ElementInfo elementLookup[type_length];
+/* The current cell update retains its element until the callback returns. */
+extern Element *updatingElement;
 extern U32 explosionPower;
 
 #define GENERATE_EXTERN_ELEMENTINFO(UPPER, LOWER) extern ElementInfo LOWER##_info;
