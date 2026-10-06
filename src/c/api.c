@@ -75,6 +75,11 @@ static _Bool finiteValue(const F32 *value) {
     return (bits & 0x7f800000) != 0x7f800000;
 }
 
+static _Bool storedCellType(ElementType type) {
+    return type > EMPTY && type < type_length &&
+           type != PHOTON && type != ELECTRON && type != PROTON;
+}
+
 export IOCanvas* exportData(void) {
     U32 len = width * height;
     U32 nonEmptyCells = 0;
@@ -157,12 +162,13 @@ export _Bool importData(IOCanvas *canvas, U32 byteLength) {
     for(U32 i = 0; i < canvas->cellLength; ++i) {
         IOCell *cell = &ioCells[i];
         ElementType type = cell->el.type;
-        if(cell->index >= cellCount || type <= EMPTY || type >= type_length ||
-           type == PHOTON || type == ELECTRON || type == PROTON || seen[cell->index] ||
+        if(cell->index >= cellCount || !storedCellType(type) || seen[cell->index] ||
            !finiteValue(&cell->el.sbpx) || !finiteValue(&cell->el.sbpy) ||
            ABS(cell->el.sbpx) > 32767 || ABS(cell->el.sbpy) > 32767 ||
            ((type == DEBRIS || type == CLONER || type == UNBREAKABLECLONER || type == PUMP) &&
-            cell->el.r0 >= type_length) || (type == PUMP && cell->el.rv >= 8)) {
+            cell->el.r0 >= type_length) ||
+           (type == DEBRIS && !storedCellType(cell->el.r0)) ||
+           (type == PUMP && cell->el.r0 && (!storedCellType(cell->el.r0) || cell->el.rv >= 8))) {
             valid = 0;
             break;
         }
