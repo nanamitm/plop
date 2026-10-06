@@ -10,6 +10,26 @@ let fluidVelocityX;
 let fluidVelocityY;
 let renderer;
 let pendingCanvasSize = null;
+let simulationBusy = false;
+const pendingSimulationActions = [];
+
+function mutateSimulation(action) {
+    if(simulationBusy) pendingSimulationActions.push(action);
+    else action();
+}
+
+function callSimulationExport(name, ...args) {
+    mutateSimulation(() => wasm.exports[name](...args));
+}
+
+function applyPendingSimulationActions() {
+    const actions = pendingSimulationActions.splice(0);
+    for(const action of actions) action();
+}
+
+function refreshMemoryViews() {
+    if(wasm.exports.memory.buffer.byteLength !== __memoryLen) refreshImageData();
+}
 
 // Enable with ?profile=1. The rolling snapshot can then be read from
 // window.plopPerformance without adding work to normal gameplay.
@@ -92,6 +112,7 @@ function applyPendingCanvasResize() {
 }
 
 function refreshImageData() {
+    __memoryLen = wasm.exports.memory.buffer.byteLength;
     const view = createView('Uint8Clamped', 'imageData', canvas.width * canvas.height * 4, true);
     imageData = renderer.isWebGPU ? view : new ImageData(view, canvas.width, canvas.height);
     if(renderer.isWebGPU) {
@@ -246,9 +267,9 @@ const controls = [
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     const res = new Uint8Array(reader.result);
-                    if(importData(res)) {
-                        state = res;
-                    }
+                    mutateSimulation(() => {
+                        if(importData(res)) state = res;
+                    });
                 }
                 reader.readAsArrayBuffer(inp.files[0]);
             }
@@ -584,7 +605,7 @@ window.constructUI = (renderList) => {
             name.visible = false;
         });
         controlNode.on('mousedown', () => {
-            control.callback(controlNode, name);
+            mutateSimulation(() => control.callback(controlNode, name));
         })
         renderList.push(controlNode, name);
         controlNode.id = 'control_' + control.name;
@@ -711,14 +732,12 @@ async function loop() {
     const frameStart = profilingEnabled ? performance.now() : 0;
     const frameInterval = profilingPreviousFrameStart ? frameStart - profilingPreviousFrameStart : 0;
     profilingPreviousFrameStart = frameStart;
+    applyPendingSimulationActions();
     eventhandler.tick();
 
     applyPendingCanvasResize();
 
-    if(__memoryLen && wasm.exports.memory.buffer.byteLength != __memoryLen) {
-        refreshImageData();
-    }
-    __memoryLen = wasm.exports.memory.buffer.byteLength;
+    refreshMemoryViews();
 
     const drawStart = profilingEnabled ? performance.now() : 0;
     if(renderer.isWebGPU) wasm.exports.prepareGPUFrame();
@@ -726,10 +745,19 @@ async function loop() {
     const drawEnd = profilingEnabled ? performance.now() : 0;
     if(!paused) {
         if(renderer.isWebGPU) {
-            wasm.exports.tickGPUFluid();
-            await renderer.stepFluid(fluidDensity, fluidVelocityX, fluidVelocityY);
+            simulationBusy = true;
+            try {
+                wasm.exports.tickGPUFluid();
+                refreshMemoryViews();
+                const density = await renderer.stepFluid(fluidDensity, fluidVelocityX, fluidVelocityY);
+                refreshMemoryViews();
+                fluidDensity.set(density);
+            } finally {
+                simulationBusy = false;
+            }
         } else wasm.exports.tick();
     }
+    refreshMemoryViews();
     const tickEnd = profilingEnabled ? performance.now() : 0;
     renderer.present(imageData, renderBaseData, renderTemperatureData);
 

@@ -22,7 +22,7 @@ class EraseTool {
     }
 
     applyPaint(mx, my) {
-        return wasm.exports.eraseArea(mx, my, areaOfEffect);
+        return callSimulationExport('eraseArea', mx, my, areaOfEffect);
         for(let y = -areaOfEffect; y <= areaOfEffect; ++y) {
             const py = my + y;
             if(py < 0) continue;

@@ -94,7 +94,9 @@ class WebGPURenderer {
                         let packed = baseColours[index];
                         var rgb = vec3u(packed & 255u, (packed >> 8u) & 255u, (packed >> 16u) & 255u);
                         let temperature = temperatures[index];
-                        if(temperature >= 0.0) {
+                        if((packed & 0x01000000u) != 0u) {
+                            // Electrons and protons overwrite the CPU heat colour too.
+                        } else if(temperature >= 0.0) {
                             var heat = temperature * 0.5;
                             if(heat >= 50.0 && heat < 130.0) { heat = 50.0; }
                             else if(heat >= 130.0) { heat = heat - 80.0; }
@@ -253,11 +255,16 @@ class WebGPURenderer {
         advect.setBindGroup(0, this.fluidBindGroup(current, output, this.fluidAdvectParams));
         advect.dispatchWorkgroups(Math.ceil(this.fluidSize / 8), Math.ceil(this.fluidSize / 8));
         advect.end();
-        encoder.copyBufferToBuffer(output, 0, this.fluidReadback, 0, density.byteLength);
+        const readback = this.fluidReadback;
+        encoder.copyBufferToBuffer(output, 0, readback, 0, density.byteLength);
         this.device.queue.submit([encoder.finish()]);
-        await this.fluidReadback.mapAsync(GPUMapMode.READ);
-        density.set(new Float32Array(this.fluidReadback.getMappedRange()).slice());
-        this.fluidReadback.unmap();
+        await readback.mapAsync(GPUMapMode.READ);
+        try {
+            // Return owned memory; Wasm views can be detached while awaiting the GPU.
+            return new Float32Array(readback.getMappedRange()).slice();
+        } finally {
+            readback.unmap();
+        }
     }
 
     present(imageData, baseData, temperatureData) {

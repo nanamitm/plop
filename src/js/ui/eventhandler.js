@@ -97,7 +97,7 @@ class EventHandler {
 
         window.addEventListener('keypress', e => {
             if(/[1-5]/.test(e.key)) {
-                wasm.exports.changeScene(+e.key);
+                callSimulationExport('changeScene', +e.key);
             } else {
                 const id = {
                     'd': 'tool_draw',
@@ -132,9 +132,9 @@ class EventHandler {
             const reader = new FileReader();
             reader.onloadend = () => {
                 const res = new Uint8Array(reader.result);
-                if(importData(res)) {
-                    state = res;
-                }
+                mutateSimulation(() => {
+                    if(importData(res)) state = res;
+                });
             }
             reader.readAsArrayBuffer(e.dataTransfer.files[0]);
         })

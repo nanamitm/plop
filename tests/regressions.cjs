@@ -3,16 +3,18 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {execFileSync} = require('node:child_process');
 const root = path.resolve(__dirname, '..');
-const build = path.join(root, 'build', 'tests');
+const build = path.join(root, 'work', 'tests');
 fs.mkdirSync(build, {recursive: true});
 function sources(dir) {
     return fs.readdirSync(dir, {withFileTypes: true}).flatMap(entry =>
         entry.isDirectory() ? sources(path.join(dir, entry.name)) :
         entry.name.endsWith('.c') ? [path.join(dir, entry.name)] : []);
 }
-const output = path.join(build, 'sim.wasm');
+const sanitized = process.argv.includes('--sanitize');
+const output = path.join(build, sanitized ? 'sim-null.wasm' : 'sim.wasm');
 execFileSync('clang', ['-O3', '-ffast-math', '-DNDEBUG', '--target=wasm32',
     '--no-standard-libraries', '-Wno-switch', '-Wl,--no-entry', '-Wl,--export-dynamic',
+    ...(sanitized ? ['-fsanitize=null', '-fsanitize-trap=null'] : []),
     '-o', output, ...sources(path.join(root, 'src', 'c')), path.join(__dirname, 'sim-fixtures.c')], {stdio: 'inherit'});
 async function fresh(side = 75, fluid = 75) {
     const {instance} = await WebAssembly.instantiate(fs.readFileSync(output), {
@@ -73,6 +75,18 @@ async function ioTests() {
     dup.set(bytes); dup.set(bytes.subarray(offset), bytes.length);
     new DataView(dup.buffer).setUint32(12, 2, true);
     assert.equal(load(e, dup), 0, 'reject duplicate coordinates');
+    for(const name of ['PUMP', 'CLONER', 'DEBRIS', 'UNBREAKABLECLONER']) {
+        const sim = await fresh();
+        sim.applyPaint(37, 37, t[name], 0);
+        assert.equal(load(sim, saved(sim)), 1, `round-trip ${name} with default state`);
+    }
+    for(const name of ['PUMP', 'DEBRIS']) {
+        const sim = await fresh();
+        sim.applyPaint(37, 37, t[name], 0);
+        const invalid = saved(sim), d = new DataView(invalid.buffer), at = d.getUint32(20, true);
+        invalid[at + 9] = t.PHOTON;
+        assert.equal(load(sim, invalid), 0, `${name} cannot hold a cell-free particle`);
+    }
     for(const [side, fluid] of [[75, 75], [600, 150], [1200, 300]]) {
         const sim = await fresh(side, fluid);
         assert.equal(load(sim, saved(sim)), 1);
@@ -110,5 +124,38 @@ async function simulationTests() {
     assert.equal(e.getNSubatomics(), 0);
     assert.equal(e.memory.buffer.byteLength, initialMemory, 'reset reuses all particle allocations');
     console.log('PASS callback lifetimes, pump discharge, particle removal and reset reuse');
+    for(const name of ['COPPER', 'WATER', 'PUMP', 'CONVEYER', 'FIREWORK', 'ELECTRON', 'PROTON', 'PHOTON', 'LIGHTNING', 'CLONER']) {
+        const sim = await fresh();
+        sim.applyPaint(0, 0, t[name], 0);
+        if(name === 'CLONER') sim.testElementState(0, 0, t.SAND, 0, 0, false);
+        for(let i = 0; i < 10; i++) sim.tick();
+    }
+    e = await fresh();
+    e.applyPaint(37, 37, t.ACID, 0); e.applyPaint(37, 38, t.WOOD, 0);
+    for(let i = 0; i < 10; i++) e.tick();
+    console.log('PASS empty/boundary conductivity, nuclear particles, lightning, cloner and acid');
 }
-(async () => { await ioTests(); await simulationTests(); })().catch(error => { console.error(error); process.exitCode = 1; });
+async function renderingTests() {
+    for(const wavelength of [0, 1, 2, 3, 4, 5, 6, 254, 255]) {
+        for(const temperature of [-10, 5, 600]) {
+            const e = await fresh();
+            e.testTemperature(37, 37, temperature);
+            e.testParticle(37, 37, wavelength, 0);
+            e.draw(); e.prepareGPUFrame();
+            const d = new DataView(e.memory.buffer), offset = (37 * 75 + 37) * 4;
+            const cpu = d.getUint32(d.getUint32(e.imageData.value, true) + offset, true) & 0xffffff;
+            const base = d.getUint32(d.getUint32(e.renderBaseData.value, true) + offset, true);
+            // Compare the actual CPU pixel with the GPU's packed particle overlay.
+            if(wavelength >= 254) {
+                assert.equal(base & 0xffffff, cpu);
+                assert.ok(base & 0x01000000, 'replacement particles bypass heat');
+            } else {
+                assert.equal(base & 0x01000000, 0);
+                assert.equal((base & cpu), base, 'photon RGB is present in both render paths');
+                assert.notEqual(base, 0);
+            }
+        }
+    }
+    console.log('PASS CPU/GPU particle colours at cold, ambient and hot temperatures');
+}
+(async () => { await ioTests(); await simulationTests(); await renderingTests(); })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -14,7 +14,7 @@ export void testElementState(U16 x, U16 y, U8 r0, U8 rv, U8 electricity, _Bool s
 
 export _Bool testScorched(U16 x, U16 y) { return getCell(x, y)->el->scorched; }
 export F32 testSubpixelY(U16 x, U16 y) { return getCell(x, y)->el->sbpy; }
-export U32 testSubatomicBytes(void) { return sizeof(Subatomic); }
+export void testTemperature(U16 x, U16 y, F32 value) { getCell(x, y)->temperature = value; }
 
 static void replaceDuringUpdate(Element *el, Cell *cell, U16 x, U16 y) {
     freeCell(cell);

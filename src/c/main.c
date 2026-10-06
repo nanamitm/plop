@@ -328,21 +328,18 @@ export void draw() {
         }
     }
 
-    Color c[7] = {
-        {.a=0xff,.r=0xff,.g=0,.b=0},
-        {.a=0xff,.r=0xff,.g=0xa5,.b=0},
-        {.a=0xff,.r=0xff,.g=0xff,.b=0},
-        {.a=0xff,.r=0,.g=0x80,.b=0},
-        {.a=0xff,.r=0,.g=0,.b=0xff},
-        {.a=0xff,.r=0x4b,.g=0,.b=0x82},
-        {.a=0xff,.r=0xee,.g=0x82,.b=0xee}
-    };
+    drawSubatomics(imageData, 0xff000000);
+}
+
+/* GPU bit 24 marks particles whose colour replaces temperature compositing. */
+void drawSubatomics(U32 *pixels, U32 replacementFlag) {
+    const U32 colors[7] = {0x0000ff, 0x00a5ff, 0x00ffff, 0x008000, 0xff0000, 0x82004b, 0xee82ee};
     for(Subatomic *node = rootSA; node; node = node->next) {
+        if(node->x < 0 || node->y < 0 || node->x >= width || node->y >= height) continue;
         U32 ind = (U16)node->y * width + (U16)node->x;
-        if(ind >= width * height) break;
-        if(node->waveLength == 0xff) imageData[ind] = c[0].value;
-        else if(node->waveLength == 0xfe) imageData[ind] = 0xff0DD061;
-        else imageData[ind] |= c[node->waveLength].value;
+        if(node->waveLength == 0xff) pixels[ind] = replacementFlag | colors[0];
+        else if(node->waveLength == 0xfe) pixels[ind] = replacementFlag | 0x0dd061;
+        else if(node->waveLength < 7) pixels[ind] |= colors[node->waveLength];
     }
 }
 
@@ -406,4 +403,5 @@ export void prepareGPUFrame() {
         renderBaseData[i] = base;
         renderTemperatureData[i] = cells[i].temperature;
     }
+    drawSubatomics(renderBaseData, 0x01000000);
 }
