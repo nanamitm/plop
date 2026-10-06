@@ -460,3 +460,12 @@ free(void *ptr) {
     *loc = obj;
   }
 }
+
+/* LLVM may fold malloc followed by zeroing into calloc in optimized builds. */
+export void *calloc(size_t count, size_t size) {
+  if (size && count > (size_t)-1 / size) return NULL;
+  size_t bytes = count * size;
+  void *ptr = malloc(bytes);
+  if (ptr) memset(ptr, 0, bytes);
+  return ptr;
+}

@@ -68,6 +68,13 @@ export void eraseArea(U16 mx, U16 my, U8 areaOfEffect) {
 
 const char *magic = "PLOP :]";
 
+/* Bit inspection also works in builds compiled with -ffast-math. */
+static _Bool finiteValue(const F32 *value) {
+    U32 bits;
+    memcpy(&bits, value, sizeof(bits));
+    return (bits & 0x7f800000) != 0x7f800000;
+}
+
 export IOCanvas* exportData(void) {
     U32 len = width * height;
     U32 nonEmptyCells = 0;
@@ -78,6 +85,8 @@ export IOCanvas* exportData(void) {
     U32 fluidCount = fluid.size * fluid.size;
     U32 cellStart = sizeof(IOCanvas) + fluidCount * sizeof(F32) * 3;
     IOCanvas *canvas = malloc(cellStart + nonEmptyCells * sizeof(IOCell));
+    if(!canvas) return NULL;
+    memset(canvas, 0, cellStart + nonEmptyCells * sizeof(IOCell));
     memcpy(canvas->magic, magic, 8);
     canvas->size = width / 75;
     canvas->cellLength = nonEmptyCells;
@@ -97,6 +106,7 @@ export IOCanvas* exportData(void) {
             ioCells[ci].el.rv =                 cells[i].el->rv;
             ioCells[ci].el.r0 =                 cells[i].el->r0;
             ioCells[ci].el.color =              cells[i].el->color;
+            ioCells[ci].el.scorched =           cells[i].el->scorched;
             ioCells[ci].el.halted =             cells[i].el->halted;
             ioCells[ci].el.electricityState =   cells[i].el->electricityState;
             ioCells[ci].el.sbpx =               cells[i].el->sbpx;
@@ -115,24 +125,51 @@ export IOCanvas* exportData(void) {
     return canvas;
 }
 
-export _Bool importData(IOCanvas *canvas) {
+/* Inspect the entire input before replacing the current scene. */
+export _Bool importData(IOCanvas *canvas, U32 byteLength) {
+    if(!canvas || byteLength < sizeof(IOCanvas)) return 0;
     if(canvas->size == 0 || canvas->size > 20) return 0;
     for(U8 i = 0; i < 8; ++i) {
         if(magic[i] != canvas->magic[i]) return 0;
     }
-    if(canvas->cellArrStart < sizeof(IOCanvas)) return 0;
+    if(canvas->cellSize != sizeof(IOCell)) return 0;
+    if(canvas->cellArrStart < sizeof(IOCanvas) || canvas->cellArrStart > byteLength) return 0;
+    if((canvas->cellArrStart - sizeof(IOCanvas)) % (sizeof(F32) * 3)) return 0;
     U32 fluidCount = (canvas->cellArrStart - sizeof(IOCanvas)) / (sizeof(F32) * 3);
     U16 fluidSize = fluidCount == 75 * 75 ? 75 : fluidCount == 150 * 150 ? 150 : fluidCount == 300 * 300 ? 300 : 0;
     if(!fluidSize) return 0;
+    U32 side = canvas->size * 75;
+    U32 cellCount = side * side;
+    if(fluidSize > side || canvas->cellLength > cellCount) return 0;
+    if(canvas->cellLength != (byteLength - canvas->cellArrStart) / sizeof(IOCell) ||
+       (byteLength - canvas->cellArrStart) % sizeof(IOCell)) return 0;
     F32 *fvx = (F32 *)((U8 *)canvas + sizeof(IOCanvas));
     F32 *fvy = fvx + fluidCount;
     F32 *tmp = fvy + fluidCount;
     IOCell *ioCells = (IOCell *)((U8 *)canvas + canvas->cellArrStart);
-    for(U32 i = 0; i < canvas->cellLength; ++i) {
-        if(ioCells[i].el.type >= type_length) {
-            return 0;
-        } 
+    for(U32 i = 0; i < fluidCount; ++i) {
+        if(!finiteValue(&fvx[i]) || !finiteValue(&fvy[i]) || !finiteValue(&tmp[i])) return 0;
     }
+    U8 *seen = malloc(cellCount);
+    if(!seen) return 0;
+    memset(seen, 0, cellCount);
+    _Bool valid = 1;
+    for(U32 i = 0; i < canvas->cellLength; ++i) {
+        IOCell *cell = &ioCells[i];
+        ElementType type = cell->el.type;
+        if(cell->index >= cellCount || type <= EMPTY || type >= type_length ||
+           type == PHOTON || type == ELECTRON || type == PROTON || seen[cell->index] ||
+           !finiteValue(&cell->el.sbpx) || !finiteValue(&cell->el.sbpy) ||
+           ABS(cell->el.sbpx) > 32767 || ABS(cell->el.sbpy) > 32767 ||
+           ((type == DEBRIS || type == CLONER || type == UNBREAKABLECLONER || type == PUMP) &&
+            cell->el.r0 >= type_length) || (type == PUMP && cell->el.rv >= 8)) {
+            valid = 0;
+            break;
+        }
+        seen[cell->index] = 1;
+    }
+    free(seen);
+    if(!valid) return 0;
 
     setSizeWithFluid(canvas->size * 75, canvas->size * 75, 1, fluidSize);
 
@@ -142,6 +179,7 @@ export _Bool importData(IOCanvas *canvas) {
         cells[ti].el->rv =               ioCells[i].el.rv;
         cells[ti].el->r0 =               ioCells[i].el.r0;
         cells[ti].el->color =            ioCells[i].el.color;
+        cells[ti].el->scorched =         ioCells[i].el.scorched;
         cells[ti].el->halted =           ioCells[i].el.halted;
         cells[ti].el->electricityState = ioCells[i].el.electricityState;
         cells[ti].el->sbpx =             ioCells[i].el.sbpx;
