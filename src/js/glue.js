@@ -159,12 +159,14 @@ const controls = [
         }
     }, {
         name: 'step',
+        mutates: true,
         symbol: '\u0015',
         callback() {
             wasm.exports.tick();
         }
     }, {
         name: 'reset',
+        mutates: true,
         symbol: '\u0013',
         callback() {
             wasm.exports.changeScene();
@@ -234,6 +236,7 @@ const controls = [
         }
     }, {
         name: 'load state',
+        mutates: true,
         symbol: '\u0017',
         callback() {
             if(state) importData(state);
@@ -605,7 +608,9 @@ window.constructUI = (renderList) => {
             name.visible = false;
         });
         controlNode.on('mousedown', () => {
-            mutateSimulation(() => control.callback(controlNode, name));
+            // Only scene changes wait for GPU readback; file pickers and downloads need the click.
+            if(control.mutates) mutateSimulation(() => control.callback(controlNode, name));
+            else control.callback(controlNode, name);
         })
         renderList.push(controlNode, name);
         controlNode.id = 'control_' + control.name;
