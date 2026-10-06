@@ -44,6 +44,27 @@ $ cd plop
 $ make
 ```
 
+# Regression tests
+
+With Node.js and clang installed, run:
+
+```
+node tests/regressions.cjs
+node tests/regressions.cjs --sanitize
+node tests/webgpu-regressions.cjs
+```
+
+The tests cover saved-state validation and compatibility, element lifetimes,
+conductivity at empty cells and edges, pump discharge, particle cleanup and
+rendering, and memory growth during asynchronous GPU readback. Test builds are
+written to the ignored `work/tests` directory. The sanitizer run traps NULL
+accesses without requiring a separate runtime library.
+
+For an optional Chromium integration check, build the site first, then run
+`node tests/browser-smoke.cjs` with Node.js 22 or newer. Set `PLOP_BROWSER` to
+the Chromium executable if it is not at the default Windows Chrome path.
+The check requires a WebGPU adapter and also exercises the Canvas2D fallback.
+
 # License
 
 This project is licensed under the [GNU General Public License v3.0](https://github.com/nanamitm/plop/blob/master/LICENSE). You may copy, distribute, and modify the software as long as you track changes/dates in the source files. Any modifications to this project must be made available under the GPL along with build & install instructions.

@@ -30,6 +30,12 @@ jobs:
       - name: Build site
         run: make
 
+      - name: Run regression tests
+        run: |
+          node tests/regressions.cjs
+          node tests/regressions.cjs --sanitize
+          node tests/webgpu-regressions.cjs
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6
 
